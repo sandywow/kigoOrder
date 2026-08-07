@@ -1,6 +1,8 @@
 /* ═════════════════════════════
    統計
    金額一律只算收費的部分，招待另外統計。
+   營業額只計入「已結帳」的訂單；未結帳的錢還沒進口袋，另外列出來提醒。
+   商品統計則是不分結帳與否全部列入 —— 那張表看的是出了多少東西，不是收了多少錢。
    ═════════════════════════════ */
 let statsScope = 'today';
 let statsOrders = [];
@@ -25,14 +27,22 @@ function switchStatsScope(scope, btn) {
 
 function calculateSalesStats(orders) {
   const stats = {
-    revenue: 0,        // 營業額（不含招待）
+    revenue: 0,        // 已結帳金額（不含招待）＝ 真正的收入
+    unpaidAmount: 0,   // 未結帳金額，還沒收到的錢
+    unpaidCount: 0,    // 未結帳筆數
     orderCount: orders.length,
     freeAmount: 0,     // 招待金額
     items: new Map()   // 品名 -> { sold, charged, free, chargedAmount, freeAmount }
   };
 
   orders.forEach(order => {
-    stats.revenue += Number(order.total) || 0;
+    const amount = Number(order.total) || 0;
+    if (paymentOf(order) === 'paid') {
+      stats.revenue += amount;
+    } else {
+      stats.unpaidAmount += amount;
+      stats.unpaidCount++;
+    }
 
     (order.items || []).forEach(item => {
       const name = item.name || '未知品項';
@@ -97,6 +107,14 @@ function paintSalesStats() {
   document.getElementById('stat-total-sales').textContent = 'NT$' + stats.revenue;
   document.getElementById('stat-order-count').textContent = String(stats.orderCount);
   document.getElementById('stat-free-amount').textContent = 'NT$' + stats.freeAmount;
+
+  // 未結帳是提醒用的，有欠款才需要跳出來，沒有就低調顯示 0
+  const unpaidEl = document.getElementById('stat-unpaid');
+  unpaidEl.textContent = 'NT$' + stats.unpaidAmount;
+  unpaidEl.classList.toggle('has-unpaid', stats.unpaidAmount > 0);
+  document.getElementById('stat-unpaid-count').textContent =
+    stats.unpaidCount ? `（${stats.unpaidCount} 筆）` : '';
+
   renderCashBox();
 
   const wrap = document.getElementById('stat-items');

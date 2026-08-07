@@ -50,6 +50,18 @@ const ORDER_STATUS = {
   done:   { label: '已完成', dot: '🟢' }
 };
 
+// 付款狀態跟製作狀態是各自獨立的：做好了不等於收過錢，先付款後取餐也很常見。
+// 只有「已結帳」的訂單會被算進統計的營業額。
+const PAYMENT_STATUS = {
+  unpaid: { label: '未結帳', dot: '⚪' },
+  paid:   { label: '已結帳', dot: '💰' }
+};
+
+// 舊訂單沒有這個欄位，一律當成未結帳
+function paymentOf(order) {
+  return order && order.paymentStatus === 'paid' ? 'paid' : 'unpaid';
+}
+
 let todayOrders = [];
 let todayOrdersSignature = '';
 
@@ -58,6 +70,22 @@ let todayOrdersSignature = '';
 // 沒有這層覆蓋的話畫面會先跳回舊狀態、下一輪才變回來（閃一下）。
 const pendingOps = new Map();
 const pendingDeletes = new Set();
+
+// 同一筆訂單可能同時有多個異動還沒被伺服器確認（例如剛按了結帳、接著按開始製作）。
+// 直接 pendingOps.set 會整包覆蓋，把前一個異動丟掉，畫面就會閃回舊狀態，所以要用合併的。
+function mergePendingOp(key, patch) {
+  pendingOps.set(key, Object.assign({}, pendingOps.get(key), patch));
+}
+
+// 確認完成後只清掉自己負責的欄位，別把同一筆訂單上其他還在等待的異動一起清掉
+function clearPendingOp(key, patch) {
+  const current = pendingOps.get(key);
+  if (!current) return;
+  Object.keys(patch).forEach(k => {
+    if (current[k] === patch[k]) delete current[k];
+  });
+  if (!Object.keys(current).length) pendingOps.delete(key);
+}
 
 function applyPendingOps(orders) {
   let result = orders;
@@ -106,18 +134,25 @@ function buildOrderCard(order) {
     </div>`;
   }).join('');
 
-  let actions = `<button class="btn-order" onclick="openEditOrder('${esc(order.orderId)}')">修改訂單</button>`;
+  const payment = paymentOf(order);
+  const id = esc(order.orderId);
+
+  let actions = `<button class="btn-order" onclick="openEditOrder('${id}')">修改訂單</button>`;
+  actions += payment === 'unpaid'
+    ? `<button class="btn-order btn-order-pay" onclick="setOrderPayment('${id}','paid')">結帳</button>`
+    : `<button class="btn-order" onclick="setOrderPayment('${id}','unpaid')">取消結帳</button>`;
   if (status === 'new') {
-    actions += `<button class="btn-order btn-order-primary" onclick="setOrderStatus('${esc(order.orderId)}','making')">開始製作</button>`;
+    actions += `<button class="btn-order btn-order-primary" onclick="setOrderStatus('${id}','making')">開始製作</button>`;
   } else if (status === 'making') {
-    actions += `<button class="btn-order btn-order-primary" onclick="setOrderStatus('${esc(order.orderId)}','done')">標記完成</button>`;
+    actions += `<button class="btn-order btn-order-primary" onclick="setOrderStatus('${id}','done')">標記完成</button>`;
   }
 
   return `
-    <div class="order-card is-${status}">
+    <div class="order-card is-${status} is-${payment}">
       <div class="order-card-head">
-        <span class="order-id">${esc(order.orderId)}</span>
+        <span class="order-id">${id}</span>
         <span class="order-badge is-${status}">${ORDER_STATUS[status].dot} ${ORDER_STATUS[status].label}</span>
+        <span class="pay-badge is-${payment}">${PAYMENT_STATUS[payment].dot} ${PAYMENT_STATUS[payment].label}</span>
       </div>
       <div class="order-sub">${formatOrderClock(order)} · 桌號 ${order.tableNumber ? esc(order.tableNumber) : '—'}</div>
       ${order.changeLog ? `<div class="order-changelog">✎ ${esc(order.changeLog)}</div>` : ''}
@@ -245,34 +280,74 @@ async function setOrderStatus(orderId, status) {
 
   // 樂觀更新：Apps Script 回應常要好幾秒，先讓畫面立刻反應，失敗再還原。
   // 狀態切換每天要按很多次，成功不跳提示，畫面上的顏色變化就夠清楚了。
-  pendingOps.set(key, { status });
+  mergePendingOp(key, { status });
   patchLoadedOrders(orderId, { status });
   repaintOrders();
 
   await queueWrite(async () => {
     const res = await apiPostOrder({ action: 'updateStatus', orderId, status });
     if (res && res.ok) {
-      pendingOps.delete(key);
+      clearPendingOp(key, { status });
       return;
     }
 
     const probe = await probeOrder(orderId);
     if (!probe.reachable) {
       // 查不到不代表沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
-      pendingOps.delete(key);
+      clearPendingOp(key, { status });
       return;
     }
     if (probe.order && probe.order.status === status) {
-      pendingOps.delete(key);
+      clearPendingOp(key, { status });
       return;
     }
 
-    pendingOps.delete(key);
+    clearPendingOp(key, { status });
     if (previous) {
       patchLoadedOrders(orderId, { status: previous });
       repaintOrders();
     }
     console.error('updateStatus failed', res);
+    showToast((res && res.error) ? '更新失敗：' + res.error : '更新失敗，請稍後再試');
+  });
+}
+
+// 跟 setOrderStatus 同一套做法：先樂觀更新畫面，再用 probe 確認伺服器上的實際結果。
+// 結帳會直接影響統計的營業額，所以按錯要能馬上改回來，成功不跳提示（badge 變化就夠明顯）。
+async function setOrderPayment(orderId, paymentStatus) {
+  const key = String(orderId);
+  const order = findLoadedOrder(orderId);
+  const previous = order ? paymentOf(order) : null;
+  if (previous === paymentStatus) return;
+
+  mergePendingOp(key, { paymentStatus });
+  patchLoadedOrders(orderId, { paymentStatus });
+  repaintOrders();
+
+  await queueWrite(async () => {
+    const res = await apiPostOrder({ action: 'updatePayment', orderId, paymentStatus });
+    if (res && res.ok) {
+      clearPendingOp(key, { paymentStatus });
+      return;
+    }
+
+    const probe = await probeOrder(orderId);
+    if (!probe.reachable) {
+      // 查不到不等於沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
+      clearPendingOp(key, { paymentStatus });
+      return;
+    }
+    if (probe.order && paymentOf(probe.order) === paymentStatus) {
+      clearPendingOp(key, { paymentStatus });
+      return;
+    }
+
+    clearPendingOp(key, { paymentStatus });
+    if (previous) {
+      patchLoadedOrders(orderId, { paymentStatus: previous });
+      repaintOrders();
+    }
+    console.error('updatePayment failed', res);
     showToast((res && res.error) ? '更新失敗：' + res.error : '更新失敗，請稍後再試');
   });
 }
@@ -368,6 +443,8 @@ function openEditOrder(orderId) {
     isManual: false,
     createdAt: order.createdAt || order.receivedAt,
     tableNumber: order.tableNumber,
+    // 唯讀顯示用：付款狀態改由訂單卡上的「結帳」按鈕處理，不在這個視窗裡改
+    paymentStatus: paymentOf(order),
     changeLog: order.changeLog || '',
     items: (order.items || []).map(i => ({
       name: i.name,
@@ -395,6 +472,8 @@ function openManualOrder() {
     isManual: true,
     orderDate: todayInputValue(),   // 可改成補登昨天等日期
     orderStatus: 'new',
+    // 補登通常是「錢已經收了才回頭記帳」，預設已結帳，要改再改
+    orderPayment: 'paid',
     tableNumber: null,
     changeLog: '',
     items: [{ name: '', category: '', temp: '', quantity: 1, freeQty: 0, unitPrice: 0 }]
@@ -412,6 +491,10 @@ function setManualDate(value) {
 
 function setManualStatus(value) {
   if (editingOrder) editingOrder.orderStatus = value;
+}
+
+function setManualPayment(value) {
+  if (editingOrder) editingOrder.orderPayment = value;
 }
 
 // 把「日期 + 現在時刻」組成當地時間，再轉成 ISO 給伺服器。
@@ -485,6 +568,10 @@ function paintEditOrder() {
     `<option value="${s}"${s === editingOrder.orderStatus ? ' selected' : ''}>${ORDER_STATUS[s].dot} ${ORDER_STATUS[s].label}</option>`
   ).join('');
 
+  const paymentOptions = ['unpaid', 'paid'].map(p =>
+    `<option value="${p}"${p === editingOrder.orderPayment ? ' selected' : ''}>${PAYMENT_STATUS[p].dot} ${PAYMENT_STATUS[p].label}</option>`
+  ).join('');
+
   const header = editingOrder.isManual
     ? `<div class="order-edit-meta">
          <div style="margin-bottom:8px">手動補登一筆訂單，訂單編號會依所選日期自動產生。</div>
@@ -495,10 +582,14 @@ function paintEditOrder() {
            <label>訂單狀態
              <select onchange="setManualStatus(this.value)">${statusOptions}</select>
            </label>
+           <label>付款狀態
+             <select onchange="setManualPayment(this.value)">${paymentOptions}</select>
+           </label>
          </div>
        </div>`
     : `<div class="order-edit-meta">
-         訂單編號 ${esc(editingOrder.orderId)}　·　桌號 ${editingOrder.tableNumber ? esc(editingOrder.tableNumber) : '—'}
+         訂單編號 ${esc(editingOrder.orderId)}　·　桌號 ${editingOrder.tableNumber ? esc(editingOrder.tableNumber) : '—'}　·　${
+           PAYMENT_STATUS[editingOrder.paymentStatus].dot} ${PAYMENT_STATUS[editingOrder.paymentStatus].label}
        </div>${changeLog}`;
 
   body.innerHTML = `
@@ -718,6 +809,7 @@ async function saveOrderEdit() {
     const orderDate = editingOrder.orderDate;
     const receivedAt = manualDateToIso(orderDate);
     const status = editingOrder.orderStatus || 'new';
+    const paymentStatus = editingOrder.orderPayment === 'paid' ? 'paid' : 'unpaid';
     // 2026-08-04 → KG260804，用來檢查伺服器有沒有照指定日期發號
     const expectedPrefix = 'KG' + orderDate.replace(/-/g, '').slice(2);
 
@@ -730,6 +822,7 @@ async function saveOrderEdit() {
         receivedAt,
         createdAt: receivedAt,
         status,
+        paymentStatus,
         tableNumber: null,
         total,
         items,
@@ -776,7 +869,7 @@ async function saveOrderEdit() {
     : '';
 
   const patch = { items: patched, total, changeLog };
-  pendingOps.set(key, patch);
+  mergePendingOp(key, patch);
   patchLoadedOrders(orderId, patch);
   repaintOrders();
   closeEditOrder();
@@ -785,23 +878,23 @@ async function saveOrderEdit() {
   await queueWrite(async () => {
     const res = await apiPostOrder({ action: 'updateOrder', orderId, items });
     if (res && res.ok) {
-      pendingOps.delete(key);
+      clearPendingOp(key, patch);
       refreshAfterWrite();
       return;
     }
 
     const probe = await probeOrder(orderId);
     if (!probe.reachable) {
-      pendingOps.delete(key);
+      clearPendingOp(key, patch);
       return;
     }
     if (probe.order && Number(probe.order.total) === Number(total)) {
-      pendingOps.delete(key);
+      clearPendingOp(key, patch);
       refreshAfterWrite();
       return;
     }
 
-    pendingOps.delete(key);
+    clearPendingOp(key, patch);
     console.error('updateOrder failed', res);
     showToast((res && res.error) ? '儲存失敗：' + res.error : '儲存失敗，請稍後再試');
     refreshAfterWrite();
@@ -882,6 +975,7 @@ function paintHistory() {
     html += `<div class="history-day">${day}　·　${list.length} 筆　·　NT$${dayTotal}</div>`;
     html += list.map(order => {
       const status = ORDER_STATUS[order.status] ? order.status : 'new';
+      const payment = paymentOf(order);
       const items = (order.items || []).map(i => {
         const freeQty = Number(i.freeQty) || 0;
         return `${esc(i.name)}${tempLabel(i.temp)} ×${Number(i.quantity) || 0}` +
@@ -895,13 +989,17 @@ function paintHistory() {
               <span class="history-id">${id}</span>
               <span>${formatOrderClock(order)}</span>
               <span class="history-status is-${status}">${ORDER_STATUS[status].label}</span>
+              <span class="pay-badge is-${payment}">${PAYMENT_STATUS[payment].dot} ${PAYMENT_STATUS[payment].label}</span>
               ${order.tableNumber ? `<span>桌號 ${esc(order.tableNumber)}</span>` : ''}
             </div>
             <div class="history-items">${items}</div>
             ${order.changeLog ? `<div class="order-changelog" style="padding:4px 0 0">✎ ${esc(order.changeLog)}</div>` : ''}
           </div>
-          <span class="history-amt">NT$${Number(order.total) || 0}</span>
+          <span class="history-amt${payment === 'unpaid' ? ' is-unpaid' : ''}">NT$${Number(order.total) || 0}</span>
           <div class="history-actions">
+            ${payment === 'unpaid'
+              ? `<button class="btn-order btn-order-pay" onclick="setOrderPayment('${id}','paid')">結帳</button>`
+              : `<button class="btn-order" onclick="setOrderPayment('${id}','unpaid')">取消結帳</button>`}
             <button class="btn-order" onclick="openEditOrder('${id}')">修改</button>
             <button class="btn-order btn-order-danger" onclick="deleteOrderById('${id}')">刪除</button>
           </div>

@@ -19,6 +19,7 @@
  *   GET  ?action=list&scope=date&date=YYYY-MM-DD → 只回傳指定日期的訂單
  *   POST {items:[...], ...}          → 新增一筆訂單（前端送出訂單時用）
  *   POST {action:'updateStatus', orderId, status}  → 更新訂單狀態
+ *   POST {action:'updatePayment', orderId, paymentStatus} → 更新付款狀態
  *   POST {action:'updateOrder', orderId, items:[...]}  → 修改訂單內容
  *   POST {action:'deleteOrder', orderId}           → 刪除整筆訂單
  *   POST {action:'clearToday', confirm:'CLEAR_TODAY'} → 清空今天所有訂單
@@ -38,10 +39,20 @@ var SHEET_HEADERS = [
   'orderTotal', 'pageUrl',
   'tableNumber', 'status',
   'originalItems', 'updatedAt', 'changeLog',
-  'freeQty', 'chargedQty', 'freeAmount'
+  'freeQty', 'chargedQty', 'freeAmount',
+  'paymentStatus'
 ];
 
 var VALID_STATUS = ['new', 'making', 'done'];
+
+// 製作狀態(status)和付款狀態(paymentStatus)是兩回事：東西做好了不代表收過錢，
+// 先結帳後取餐也很常見，所以兩者各自獨立，不互相連動。
+var VALID_PAYMENT = ['unpaid', 'paid'];
+
+// 這個欄位是後來才加的，先前的資料列在這一格是空白，一律視為未結帳
+function normalizePayment(value) {
+  return String(value) === 'paid' ? 'paid' : 'unpaid';
+}
 
 function col(name) {
   return SHEET_HEADERS.indexOf(name);
@@ -59,6 +70,9 @@ function doPost(e) {
 
     if (payload.action === 'updateStatus') {
       return handleUpdateStatus(payload);
+    }
+    if (payload.action === 'updatePayment') {
+      return handleUpdatePayment(payload);
     }
     if (payload.action === 'updateOrder') {
       return handleUpdateOrder(payload);
@@ -121,6 +135,9 @@ function handleCreateOrder(payload) {
       // 客人自己送的訂單一律從「新訂單」開始，不接受前端指定。
       status: (payload.manual && VALID_STATUS.indexOf(payload.status) !== -1)
         ? payload.status : 'new',
+      // 同理，補登的單通常錢已經收了，可以直接指定；
+      // 客人自己送的單一律從「未結帳」開始，等店家實際收到錢才由後台按結帳。
+      paymentStatus: payload.manual ? normalizePayment(payload.paymentStatus) : 'unpaid',
       // 客人原始點的內容，之後店家修改訂單時這欄不會被動到，方便日後查詢對照。
       originalItems: JSON.stringify(items),
       updatedAt: '',
@@ -196,6 +213,45 @@ function handleUpdateStatus(payload) {
 }
 
 /* ═════════════════════════════
+   更新付款狀態
+   ═════════════════════════════ */
+function handleUpdatePayment(payload) {
+  var orderId = payload.orderId;
+  var paymentStatus = payload.paymentStatus;
+  if (!orderId) throw new Error('missing orderId');
+  if (VALID_PAYMENT.indexOf(paymentStatus) === -1) {
+    throw new Error('invalid paymentStatus: ' + paymentStatus);
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = getOrCreateSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) throw new Error('order not found: ' + orderId);
+
+    var idColumn = sheet.getRange(2, col('orderId') + 1, lastRow - 1, 1).getValues();
+    var paymentColumn = col('paymentStatus') + 1;
+    var updated = 0;
+
+    // 跟製作狀態一樣，一筆訂單在表單裡是多列，每列都要更新
+    for (var i = 0; i < idColumn.length; i++) {
+      if (String(idColumn[i][0]) === String(orderId)) {
+        sheet.getRange(i + 2, paymentColumn).setValue(paymentStatus);
+        updated++;
+      }
+    }
+
+    if (!updated) throw new Error('order not found: ' + orderId);
+    return jsonResponse({
+      ok: true, orderId: orderId, paymentStatus: paymentStatus, updatedRows: updated
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ═════════════════════════════
    修改訂單內容
    ═════════════════════════════ */
 function handleUpdateOrder(payload) {
@@ -239,6 +295,8 @@ function handleUpdateOrder(payload) {
       orderTotal: chargedTotal(normalized),
       tableNumber: first[col('tableNumber')],
       status: first[col('status')] || 'new',
+      // 改品項不影響已經收過的錢，付款狀態沿用原本的
+      paymentStatus: normalizePayment(first[col('paymentStatus')]),
       // 舊訂單沒有 originalItems 的話，把「這次修改前」的內容補存成原始資料
       originalItems: first[col('originalItems')] || JSON.stringify(oldItems),
       updatedAt: new Date(),
@@ -395,7 +453,8 @@ function buildItemRow(ctx, item) {
     ctx.changeLog,
     item.freeQty,
     item.chargedQty,
-    item.freeQty * item.unitPrice
+    item.freeQty * item.unitPrice,
+    ctx.paymentStatus
   ];
 }
 
@@ -509,6 +568,7 @@ function listOrders(scope, dateStr) {
         pageUrl: row[col('pageUrl')],
         tableNumber: row[col('tableNumber')] || null,
         status: row[col('status')] || 'new',
+        paymentStatus: normalizePayment(row[col('paymentStatus')]),
         updatedAt: row[col('updatedAt')] ? toIsoString(row[col('updatedAt')]) : null,
         changeLog: row[col('changeLog')] || '',
         originalItems: parseJsonOrNull(row[col('originalItems')]),
