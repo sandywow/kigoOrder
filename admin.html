@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>後台設定 — 享·奇果</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400&family=Noto+Serif+TC:wght@300;400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cream: #F7F3EC; --parchment: #EDE5D8; --beige: #D9CFC0;
+      --caramel: #8B5E3C; --caramel-lt: #B8845A;
+      --ink: #1E1609; --ink-soft: #4A3A28; --ink-faint: #7A6850;
+      --white: #FFFCF7; --danger: #b94040;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 14px;
+      min-height: 100vh;
+      padding-bottom: 100px;
+    }
+
+    /* ── Header ── */
+    .admin-header {
+      background: var(--caramel);
+      color: var(--cream);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 14px rgba(44,36,22,0.25);
+    }
+    .admin-header-left { display: flex; align-items: center; gap: 14px; }
+    .admin-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 17px;
+      letter-spacing: 0.18em;
+    }
+    .preview-link {
+      font-size: 12px;
+      color: rgba(247,243,236,0.7);
+      text-decoration: none;
+      letter-spacing: 0.12em;
+      border: 1px solid rgba(247,243,236,0.3);
+      padding: 4px 10px;
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .preview-link:hover { color: var(--cream); border-color: rgba(247,243,236,0.7); }
+    .btn-export {
+      background: transparent;
+      color: rgba(247,243,236,0.85);
+      border: 1px solid rgba(247,243,236,0.4);
+      padding: 10px 18px;
+      font-family: 'DM Serif Display', serif;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .btn-export:hover { background: rgba(247,243,236,0.12); border-color: rgba(247,243,236,0.8); color: var(--cream); }
+    .btn-save {
+      background: var(--cream);
+      color: var(--caramel);
+      border: none;
+      padding: 10px 22px;
+      font-family: 'DM Serif Display', serif;
+      font-size: 13px;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.3s;
+    }
+    .btn-save:hover { background: var(--parchment); }
+    .btn-save:active { transform: scale(0.98); }
+
+    /* ── 小便籤（固定一行）── */
+    .notepad {
+      background: #FFF9E3;
+      border-bottom: 1px solid #E8D9A0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 16px;
+    }
+    .notepad-icon { font-size: 14px; flex-shrink: 0; }
+    .notepad-status { font-size: 12px; color: #8A9A5B; width: 14px; flex-shrink: 0; }
+    .notepad input {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid #E8D9A0;
+      border-radius: 6px;
+      background: #FFFDF4;
+      color: var(--ink);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+    }
+    .notepad input:focus { border-color: #C9AC4E; background: #fff; }
+
+    /* ── Main tabs ── */
+    .admin-tabs {
+      display: flex;
+      background: var(--parchment);
+      border-bottom: 1px solid var(--beige);
+    }
+    .admin-tab {
+      flex: 1;
+      padding: 13px 6px;
+      border: none;
+      background: none;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      color: var(--ink-faint);
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      border-bottom: 2px solid transparent;
+      transition: all 0.25s;
+    }
+    .admin-tab.active {
+      color: var(--caramel);
+      border-bottom-color: var(--caramel);
+      background: var(--cream);
+    }
+
+    /* ── Panels ── */
+    .admin-panel { display: none; padding: 20px 16px; }
+    .admin-panel.active { display: block; }
+
+    /* ── Section card ── */
+    .section-card {
+      background: var(--white);
+      border: 1px solid var(--beige);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .section-card-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 11px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--caramel);
+      padding: 12px 18px;
+      background: var(--parchment);
+      border-bottom: 1px solid var(--beige);
+    }
+    .section-fields {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── Form fields ── */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label {
+      font-size: 11px;
+      color: var(--ink-faint);
+      letter-spacing: 0.14em;
+    }
+    .hint { font-size: 10px; color: var(--ink-faint); opacity: 0.65; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.25s;
+      appearance: none;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      border-color: var(--caramel-lt);
+      background: var(--white);
+    }
+    .field textarea { resize: vertical; min-height: 68px; line-height: 1.65; }
+    .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A6850' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+    .field-row { display: flex; gap: 10px; }
+    .field-row .field { flex: 1; min-width: 0; }
+
+    /* ── Toggle ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+    .toggle-label { font-size: 13px; color: var(--ink-soft); }
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--beige);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .toggle-track::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+    .toggle input:checked ~ .toggle-track { background: var(--caramel); }
+    .toggle input:checked ~ .toggle-track::before { transform: translateX(20px); }
+
+    /* ── Category sub-tabs ── */
+    .cat-tabs {
+      display: flex;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--beige);
+      margin-bottom: 18px;
+      scrollbar-width: none;
+    }
+    .cat-tabs::-webkit-scrollbar { display: none; }
+    .cat-tab {
+      padding: 10px 18px;
+      border: none;
+      background: none;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      color: var(--ink-faint);
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: all 0.25s;
+      flex-shrink: 0;
+    }
+    .cat-tab.active { color: var(--caramel); border-bottom-color: var(--caramel); }
+
+    /* ── Menu item card ── */
+    .item-card {
+      background: var(--white);
+      border: 1px solid var(--beige);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .item-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px;
+      background: var(--parchment);
+      border-bottom: 1px solid var(--beige);
+      cursor: pointer;
+      user-select: none;
+    }
+    .item-card-name { font-size: 14px; color: var(--ink-soft); }
+    .soldout-badge {
+      font-size: 10px;
+      background: #888;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.15em;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .item-card.is-soldout .item-card-header { opacity: 0.55; }
+    .item-card-actions { display: flex; gap: 8px; align-items: center; }
+    .item-chevron {
+      font-size: 10px;
+      color: var(--ink-faint);
+      transition: transform 0.3s;
+    }
+    .item-card.collapsed .item-chevron { transform: rotate(-90deg); }
+    .item-card.collapsed .item-fields { display: none; }
+    .item-fields { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .btn-remove {
+      background: none;
+      border: 1px solid var(--beige);
+      color: var(--ink-faint);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.25s;
+      font-family: 'Noto Serif TC', serif;
+      letter-spacing: 0.05em;
+    }
+    .btn-remove:hover { border-color: var(--danger); color: var(--danger); }
+    .btn-move {
+      background: none;
+      border: 1px solid var(--beige);
+      color: var(--ink-faint);
+      width: 28px;
+      height: 28px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      padding: 0;
+    }
+    .btn-move:hover:not(:disabled) { border-color: var(--caramel-lt); color: var(--caramel); }
+    .btn-move:disabled { opacity: 0.25; cursor: default; }
+    .btn-move svg { width: 12px; height: 12px; }
+
+    /* ── Add button ── */
+    .btn-add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border: 2px dashed var(--beige);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--ink-faint);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      transition: all 0.25s;
+      margin-top: 4px;
+    }
+    .btn-add:hover { border-color: var(--caramel-lt); color: var(--caramel); background: rgba(139,94,60,0.04); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(90px);
+      background: var(--ink-soft);
+      color: var(--cream);
+      padding: 13px 26px;
+      border-radius: 6px;
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 999;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(44,36,22,0.25);
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Config Modal ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(30,22,9,0.55);
+      z-index: 200;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      margin: auto;
+      width: min(92vw, 640px);
+      height: min(80vh, 600px);
+      background: var(--white);
+      border-radius: 12px;
+      z-index: 201;
+      box-shadow: 0 24px 60px rgba(30,22,9,0.3);
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-backdrop.open, .modal.open { display: flex; }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--parchment);
+      border-bottom: 1px solid var(--beige);
+      flex-shrink: 0;
+    }
+    .modal-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 15px;
+      letter-spacing: 0.2em;
+      color: var(--caramel);
+    }
+    .modal-copy-btn {
+      background: var(--caramel);
+      color: var(--cream);
+      border: none;
+      padding: 8px 18px;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+    .modal-copy-btn:hover { background: var(--ink-soft); }
+    .modal-copy-btn.copied { background: #5a8a5a; }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: var(--ink-faint);
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+    .modal-close:hover { color: var(--ink); }
+    .modal-hint {
+      padding: 10px 20px 6px;
+      font-size: 12px;
+      color: var(--ink-faint);
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
+    }
+    .modal-textarea {
+      flex: 1;
+      width: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 12px 20px 20px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--ink-soft);
+      background: var(--cream);
+      overflow-y: auto;
+    }
+
+    /* ── Reset btn ── */
+    .btn-reset {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: none;
+      color: var(--ink-faint);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      transition: all 0.25s;
+    }
+    .btn-reset:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Section title row for other tab ── */
+    .key-chip {
+      display: inline-block;
+      font-size: 10px;
+      color: var(--caramel);
+      letter-spacing: 0.2em;
+      border: 1px solid rgba(139,94,60,0.25);
+      padding: 2px 8px;
+      border-radius: 2px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .other-group {
+      border-bottom: 1px solid var(--parchment);
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+    .other-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    /* ── 今日訂單 ── */
+    .order-group { margin-bottom: 20px; }
+    .order-group:last-child { margin-bottom: 0; }
+    .order-group-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      color: var(--ink-soft);
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--parchment);
+    }
+    .order-group-count {
+      font-family: 'DM Serif Display', serif;
+      font-size: 13px;
+      color: var(--caramel);
+    }
+    .order-group-empty {
+      font-size: 12px;
+      color: var(--ink-faint);
+      opacity: 0.6;
+      padding: 2px 0 4px;
+    }
+
+    .order-card {
+      border: 1px solid var(--beige);
+      border-left: 4px solid var(--beige);
+      border-radius: 8px;
+      background: var(--white);
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .order-card:last-child { margin-bottom: 0; }
+    .order-card.is-new {
+      border-color: #E0A93B;
+      border-left-color: #E0A93B;
+      background: #FFFAEF;
+      box-shadow: 0 3px 14px rgba(224,169,59,0.22);
+    }
+    .order-card.is-making { border-left-color: #5384B5; }
+    .order-card.is-done { border-left-color: #6E9E6E; opacity: 0.72; }
+
+    .order-card-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 14px 8px;
+    }
+    .order-id {
+      font-family: 'DM Serif Display', serif;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      color: var(--ink);
+    }
+    .order-badge {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .order-badge.is-new    { background: #E0A93B; color: #fff; }
+    .order-badge.is-making { background: #5384B5; color: #fff; }
+    .order-badge.is-done   { background: #6E9E6E; color: #fff; }
+
+    .order-sub {
+      padding: 0 14px 10px;
+      font-size: 12px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+    }
+    .order-items {
+      padding: 10px 14px;
+      border-top: 1px dashed var(--beige);
+      border-bottom: 1px dashed var(--beige);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    /* grid 固定三個欄寬，「單價×數量」才會每一列都停在同一個中間位置並對齊 */
+    .order-item-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px 64px;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .order-item-name { color: var(--ink); min-width: 0; }
+    .order-item-temp { color: var(--caramel); font-size: 11px; }
+    .order-item-calc {
+      color: var(--ink-faint);
+      font-size: 12px;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .order-item-sub { color: var(--ink-soft); text-align: right; }
+    .order-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      flex-wrap: wrap;
+    }
+    .order-total-line { font-size: 12px; color: var(--ink-faint); }
+    .order-item-free {
+      display: inline-block;
+      font-size: 10px;
+      background: #7A7D5C;
+      color: #fff;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+      letter-spacing: 0.05em;
+    }
+    .order-free-note { color: #7A7D5C; margin-left: 4px; }
+    .order-total-amt {
+      font-family: 'DM Serif Display', serif;
+      font-size: 16px;
+      color: var(--caramel);
+      margin-left: 6px;
+    }
+    .order-actions { display: flex; gap: 8px; }
+    .btn-order {
+      border: 1px solid var(--beige);
+      background: none;
+      color: var(--ink-faint);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      padding: 7px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-order:hover { border-color: var(--caramel-lt); color: var(--caramel); }
+    .btn-order-primary {
+      background: var(--caramel);
+      border-color: var(--caramel);
+      color: var(--cream);
+    }
+    .btn-order-primary:hover { background: var(--ink-soft); border-color: var(--ink-soft); color: var(--cream); }
+    .order-hint {
+      font-size: 12px;
+      color: var(--ink-faint);
+      line-height: 1.8;
+      padding: 4px 0;
+    }
+    .order-changelog {
+      padding: 0 14px 10px;
+      font-size: 11px;
+      color: var(--caramel);
+      line-height: 1.7;
+      word-break: break-all;
+    }
+
+    /* ── 修改訂單 Modal ── */
+    #order-edit-modal { height: min(86vh, 660px); }
+    .order-edit-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--cream);
+    }
+    .order-edit-meta {
+      font-size: 12px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+      line-height: 1.8;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--beige);
+      margin-bottom: 4px;
+    }
+    .edit-row {
+      background: var(--white);
+      border: 1px solid var(--beige);
+      border-radius: 7px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .edit-row-top { display: flex; gap: 8px; align-items: center; }
+    .edit-row select {
+      padding: 7px 10px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      outline: none;
+      min-width: 0;
+    }
+    .edit-row select:focus { border-color: var(--caramel-lt); background: var(--white); }
+    .edit-select-item { flex: 1; }
+    .edit-select-temp { width: 78px; flex-shrink: 0; }
+    .edit-row-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .edit-qty { display: flex; align-items: center; gap: 6px; }
+    .edit-qty button {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--white);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .edit-qty button:hover { border-color: var(--caramel-lt); color: var(--caramel); }
+    .edit-qty input {
+      width: 48px;
+      padding: 6px 4px;
+      text-align: center;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      outline: none;
+    }
+    .manual-fields { display: flex; gap: 10px; flex-wrap: wrap; }
+    .manual-fields label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--ink-faint);
+    }
+    .manual-fields input, .manual-fields select {
+      padding: 6px 10px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--white);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      color: var(--ink);
+      outline: none;
+    }
+    .manual-fields input:focus, .manual-fields select:focus { border-color: var(--caramel-lt); }
+
+    .edit-row.has-free { border-color: #7A7D5C; background: #FAFBF5; }
+    .edit-row-free {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 8px;
+      border-top: 1px dashed var(--beige);
+    }
+    .edit-free-label {
+      font-size: 12px;
+      color: #7A7D5C;
+      letter-spacing: 0.1em;
+      flex-shrink: 0;
+    }
+    .edit-free-summary { font-size: 11px; color: var(--ink-faint); }
+    .edit-row-free .edit-qty button:disabled { opacity: 0.3; cursor: default; }
+    .edit-row-price { font-size: 12px; color: var(--ink-faint); }
+    .edit-row-sub {
+      font-family: 'DM Serif Display', serif;
+      font-size: 14px;
+      color: var(--ink-soft);
+    }
+    .edit-remove {
+      border: 1px solid var(--beige);
+      background: none;
+      color: var(--ink-faint);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .edit-remove:hover { border-color: var(--danger); color: var(--danger); }
+    .order-edit-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--beige);
+      background: var(--parchment);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .btn-order-danger { border-color: rgba(185,64,64,0.4); color: var(--danger); }
+    .btn-order-danger:hover { border-color: var(--danger); color: #fff; background: var(--danger); }
+    .order-edit-total { font-size: 12px; color: var(--ink-faint); }
+    .order-edit-total span {
+      font-family: 'DM Serif Display', serif;
+      font-size: 17px;
+      color: var(--caramel);
+      margin-left: 6px;
+    }
+
+    /* ── 訂單紀錄 ── */
+    .history-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .history-scopes {
+      display: flex;
+      border: 1px solid var(--beige);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .history-scope {
+      border: none;
+      background: none;
+      padding: 7px 16px;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 12px;
+      color: var(--ink-faint);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .history-scope + .history-scope { border-left: 1px solid var(--beige); }
+    .history-scope.active { background: var(--caramel); color: var(--cream); }
+    .history-day {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--caramel);
+      padding: 12px 0 6px;
+      border-bottom: 1px solid var(--parchment);
+      margin-bottom: 8px;
+    }
+    .history-day:first-child { padding-top: 0; }
+    .history-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px dashed var(--parchment);
+    }
+    .history-main { min-width: 0; flex: 1; }
+    .history-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--ink-faint);
+    }
+    .history-id { font-family: 'DM Serif Display', serif; font-size: 14px; color: var(--ink); }
+    .history-items { font-size: 12px; color: var(--ink-soft); line-height: 1.75; margin-top: 3px; }
+    .history-amt {
+      font-family: 'DM Serif Display', serif;
+      font-size: 15px;
+      color: var(--caramel);
+      white-space: nowrap;
+    }
+    .history-actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+    .history-empty { padding: 14px 0; color: var(--ink-faint); font-size: 13px; }
+    .history-status {
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 10px;
+      color: #fff;
+    }
+    .history-status.is-new    { background: #E0A93B; }
+    .history-status.is-making { background: #5384B5; }
+    .history-status.is-done   { background: #6E9E6E; }
+
+    /* ── 統計 ── */
+    .stat-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat-box {
+      flex: 1;
+      min-width: 96px;
+      background: var(--cream);
+      border: 1px solid var(--beige);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .stat-label { font-size: 11px; color: var(--ink-faint); letter-spacing: 0.08em; }
+    .stat-label small { font-size: 9px; opacity: 0.8; }
+    .stat-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 19px;
+      color: var(--caramel);
+    }
+    .stat-value-free { color: #7A7D5C; }
+    .cash-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--ink-soft);
+      padding: 5px 0;
+    }
+    .cash-total {
+      border-top: 1px solid var(--beige);
+      margin-top: 4px;
+      padding-top: 10px;
+      font-family: 'DM Serif Display', serif;
+      font-size: 16px;
+      color: var(--caramel);
+    }
+    .stat-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .stat-table th {
+      text-align: right;
+      font-weight: normal;
+      font-size: 10px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+      padding: 0 0 7px;
+      border-bottom: 1px solid var(--beige);
+      white-space: nowrap;
+    }
+    .stat-table th:first-child, .stat-table td:first-child { text-align: left; }
+    .stat-table td {
+      text-align: right;
+      padding: 7px 0;
+      border-bottom: 1px dashed var(--parchment);
+      color: var(--ink-soft);
+      white-space: nowrap;
+    }
+    .stat-table td:first-child { color: var(--ink); white-space: normal; }
+    .stat-table th + th, .stat-table td + td { padding-left: 8px; }
+    .stat-free-cell { color: #7A7D5C; }
+    .stat-scroll { overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header class="admin-header">
+  <div class="admin-header-left">
+    <div class="admin-title">◆ 奇果後台</div>
+    <a class="preview-link" href="index.html" target="_blank">預覽首頁 ↗</a>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn-export" onclick="openConfigModal()">複製 config.js</button>
+    <button class="btn-save" onclick="saveConfig()">儲存設定</button>
+  </div>
+</header>
+
+<!-- ═══ 小便籤（固定置頂，所有分頁都看得到）═══ -->
+<div class="notepad" id="notepad">
+  <span class="notepad-icon">📌</span>
+  <input type="text" id="notepad-text" placeholder="📝">
+  <span class="notepad-status" id="notepad-status"></span>
+</div>
+
+<!-- ═══ Main tabs ═══ -->
+<div class="admin-tabs">
+  <button class="admin-tab active" onclick="switchPanel('landing', this)">首頁設定</button>
+  <button class="admin-tab" onclick="switchPanel('menu', this)">菜單管理</button>
+  <button class="admin-tab" onclick="switchPanel('orders', this)">訂單管理</button>
+  <button class="admin-tab" onclick="switchPanel('stats', this)">銷售統計</button>
+  <button class="admin-tab" onclick="switchPanel('other', this)">其他設定</button>
+</div>
+
+<!-- ═══════════════════════════════════
+     PANEL: 首頁設定
+═══════════════════════════════════ -->
+<div class="admin-panel active" id="panel-landing">
+
+  <div class="section-card">
+    <div class="section-card-title">店家資訊</div>
+    <div class="section-fields">
+      <div class="field-row">
+        <div class="field">
+          <label>店名（英文）</label>
+          <input type="text" id="ld-cafeName">
+        </div>
+        <div class="field">
+          <label>店名（中文）</label>
+          <input type="text" id="ld-cafeSub">
+        </div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">顯示今日日期</span>
+        <label class="toggle">
+          <input type="checkbox" id="ld-showDate">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>季節標籤（日期旁小字）</label>
+        <input type="text" id="ld-dateSeasonLabel" placeholder="Spring Menu">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">主視覺</div>
+    <div class="section-fields">
+      <div class="toggle-row">
+        <span class="toggle-label">隱藏主視覺</span>
+        <label class="toggle">
+          <input type="checkbox" id="ld-hideHero">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>單張圖片網址 <span class="hint">（空白 = 顯示預設插圖）</span></label>
+        <input type="text" id="ld-heroImage" placeholder="留空則顯示預設插圖">
+      </div>
+      <div class="field">
+        <label>右上角標籤</label>
+        <input type="text" id="ld-heroBadge" placeholder="當季限定">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>主標題</label>
+          <input type="text" id="ld-heroTitle">
+        </div>
+        <div class="field">
+          <label>副標題</label>
+          <input type="text" id="ld-heroSubtitle">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">詩句區塊</div>
+    <div class="section-fields">
+      <div class="field">
+        <label>詩句</label>
+        <input type="text" id="ld-tagline">
+      </div>
+      <div class="field">
+        <label>英文小字</label>
+        <input type="text" id="ld-taglineJp">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">今日推薦卡</div>
+    <div class="section-fields">
+      <div class="toggle-row">
+        <span class="toggle-label">隱藏今日推薦卡</span>
+        <label class="toggle">
+          <input type="checkbox" id="ld-hideCard">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>卡片標題 <span class="hint">（空白 = 隱藏整張卡）</span></label>
+        <input type="text" id="ld-cardLabel" placeholder="今日推薦">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>品名</label>
+          <input type="text" id="ld-cardName">
+        </div>
+        <div class="field">
+          <label>副品名</label>
+          <input type="text" id="ld-cardNameJp">
+        </div>
+      </div>
+      <div class="field">
+        <label>說明文字</label>
+        <input type="text" id="ld-cardDesc">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>價格</label>
+          <input type="text" id="ld-cardPrice" placeholder="NT$100">
+        </div>
+        <div class="field">
+          <label>標籤</label>
+          <input type="text" id="ld-cardTag" placeholder="限定">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">Banner 海報</div>
+    <div class="section-fields">
+      <div class="toggle-row">
+        <span class="toggle-label">隱藏 Banner 海報</span>
+        <label class="toggle">
+          <input type="checkbox" id="ld-hideBanner">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>Banner 標題 <span class="hint">（空白 = 不顯示標題）</span></label>
+        <input type="text" id="ld-bannerLabel">
+      </div>
+      <div class="field">
+        <label>圖片網址 <span class="hint">（空白 = 顯示佔位框或隱藏）</span></label>
+        <input type="text" id="ld-bannerImage" placeholder="貼上圖片網址">
+      </div>
+      <div class="field">
+        <label>輪播圖片網址 <span class="hint">（每行一個，優先於單張圖片）</span></label>
+        <textarea id="ld-bannerImages" placeholder="src/BANNER FISH-03.jpg\nsrc/BANNER AFFOGATO-04.jpg"></textarea>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">無圖時顯示灰色佔位框</span>
+        <label class="toggle">
+          <input type="checkbox" id="ld-bannerPlaceholder">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">CTA 按鈕</div>
+    <div class="section-fields">
+      <div class="field-row">
+        <div class="field">
+          <label>按鈕文字</label>
+          <input type="text" id="ld-ctaButton" placeholder="今日菜單">
+        </div>
+        <div class="field">
+          <label>按鈕下方提示</label>
+          <input type="text" id="ld-ctaHint" placeholder="瀏覽全品項">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">頁腳</div>
+    <div class="section-fields">
+      <div class="field-row">
+        <div class="field">
+          <label>左側文字</label>
+          <input type="text" id="ld-footerLeft">
+        </div>
+        <div class="field">
+          <label>右側文字</label>
+          <input type="text" id="ld-footerRight">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">菜單頁標題</div>
+    <div class="section-fields">
+      <div class="field-row">
+        <div class="field">
+          <label>標題</label>
+          <input type="text" id="ld-menuTitle">
+        </div>
+        <div class="field">
+          <label>副標（如季節）</label>
+          <input type="text" id="ld-menuSubtitle">
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════
+     PANEL: 菜單管理
+═══════════════════════════════════ -->
+<div class="admin-panel" id="panel-menu">
+  <div class="cat-tabs" id="cat-tabs"></div>
+  <div id="menu-editor"></div>
+</div>
+
+<!-- ═══════════════════════════════════
+     PANEL: 訂單管理
+═══════════════════════════════════ -->
+<div class="admin-panel" id="panel-orders">
+  <div class="section-card">
+    <div class="section-card-title">今日訂單</div>
+    <div class="section-fields">
+      <div id="today-orders">讀取中…</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">訂單紀錄</div>
+    <div class="section-fields" id="order-management">
+      <div class="history-bar">
+        <div class="history-scopes">
+          <button class="history-scope active" data-scope="today" onclick="switchHistoryScope('today')">今天</button>
+          <button class="history-scope" data-scope="month" onclick="switchHistoryScope('month')">本月</button>
+          <button class="history-scope" data-scope="all" onclick="switchHistoryScope('all')">全部</button>
+        </div>
+        <button class="btn-order" onclick="openManualOrder()">＋ 補登訂單</button>
+      </div>
+      <div id="order-list">讀取中…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     PANEL: 銷售統計
+═══════════════════════════════════ -->
+<div class="admin-panel" id="panel-stats">
+  <div class="section-card">
+    <div class="section-card-title">統計期間</div>
+    <div class="section-fields">
+      <div class="history-bar">
+        <div class="history-scopes">
+          <button class="history-scope active" data-scope="today" onclick="switchStatsScope('today', this)">今天</button>
+          <button class="history-scope" data-scope="date" onclick="switchStatsScope('date', this)">指定日期</button>
+        </div>
+        <button class="btn-order" onclick="renderSalesStats()">重新整理</button>
+      </div>
+      <div class="field" id="stats-date-row" style="display:none">
+        <label>選擇日期</label>
+        <input type="date" id="stats-date" onchange="renderSalesStats()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">營業資訊</div>
+    <div class="section-fields">
+      <div class="stat-grid">
+        <div class="stat-box">
+          <span class="stat-label">營業額<small>（不含招待）</small></span>
+          <span class="stat-value" id="stat-total-sales">NT$0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">訂單數</span>
+          <span class="stat-value" id="stat-order-count">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">招待金額</span>
+          <span class="stat-value stat-value-free" id="stat-free-amount">NT$0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">現金計算</div>
+    <div class="section-fields">
+      <div class="field">
+        <label>開店現金</label>
+        <input type="number" id="stat-opening-cash" min="0" placeholder="0" oninput="renderCashBox()">
+      </div>
+      <div class="cash-line"><span>開店現金</span><span id="cash-opening">NT$0</span></div>
+      <div class="cash-line"><span>今日營收（不含招待）</span><span id="cash-income">NT$0</span></div>
+      <div class="cash-line cash-total"><span>錢包應有金額</span><span id="cash-expected">NT$0</span></div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">商品統計</div>
+    <div class="section-fields">
+      <div id="stat-items">尚無資料</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     PANEL: 其他設定
+═══════════════════════════════════ -->
+<div class="admin-panel" id="panel-other">
+
+  <div class="section-card">
+    <div class="section-card-title">分頁標籤名稱</div>
+    <div class="section-fields" id="tabs-editor"></div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">各分頁標題</div>
+    <div class="section-fields" id="section-titles-editor"></div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">訂單 API</div>
+    <div class="section-fields">
+      <div class="field">
+        <label>訂單 API Endpoint <span class="hint">（Google Apps Script 部署後的 /exec 網址，留空則只存在本機瀏覽器）</span></label>
+        <input type="text" id="ld-orderEndpoint" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">訂單資料維護</div>
+    <div class="section-fields">
+      <p style="font-size:12px;color:var(--ink-faint);line-height:1.8;letter-spacing:0.05em">
+        清空 Google 試算表上<strong>今天</strong>的所有訂單，用來清掉測試資料，讓正式營業時訂單編號從 001 開始。<br>
+        昨天以前的訂單不會被動到。此操作無法復原，營業中請勿使用。
+      </p>
+      <button class="btn-reset" id="btn-clear-today" onclick="clearTodayOrders()">清空今日所有訂單</button>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-title">重置設定</div>
+    <div class="section-fields">
+      <p style="font-size:12px;color:var(--ink-faint);line-height:1.8;letter-spacing:0.05em">清除後台所有儲存，恢復 config.js 原始預設值。</p>
+      <button class="btn-reset" onclick="resetConfig()">清除所有儲存，恢復預設值</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ Config Modal ═══ -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeConfigModal()"></div>
+<div class="modal" id="config-modal">
+  <div class="modal-header">
+    <div class="modal-title">config.js</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="modal-copy-btn" id="copy-btn" onclick="copyConfig()">複製全部</button>
+      <button class="modal-close" onclick="closeConfigModal()">✕</button>
+    </div>
+  </div>
+  <p class="modal-hint">複製後貼上覆蓋 config.js 檔案即可永久生效</p>
+  <textarea class="modal-textarea" id="config-output" readonly spellcheck="false"></textarea>
+</div>
+
+<!-- ═══ 修改訂單 Modal ═══ -->
+<div class="modal-backdrop" id="order-edit-backdrop" onclick="closeEditOrder()"></div>
+<div class="modal" id="order-edit-modal">
+  <div class="modal-header">
+    <div class="modal-title">修改訂單</div>
+    <button class="modal-close" onclick="closeEditOrder()">✕</button>
+  </div>
+  <div class="order-edit-body" id="order-edit-body"></div>
+  <div class="order-edit-foot">
+    <button class="btn-order btn-order-danger" onclick="deleteWholeOrder()">刪除整筆訂單</button>
+    <div class="order-edit-total">訂單總金額<span id="order-edit-total">NT$0</span></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-order" onclick="closeEditOrder()">取消</button>
+      <button class="btn-order btn-order-primary" id="order-edit-save" onclick="saveOrderEdit()">儲存修改</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">已儲存</div>
+
+<script src="js/config.js"></script>
+<script src="js/admin/admin-layout.js"></script>
+<script src="js/admin/admin-data.js"></script>
+<script src="js/admin/admin-menu.js"></script>
+<script src="js/admin/admin-pages.js"></script>
+<script src="js/admin/admin-orders.js"></script>
+<script src="js/admin/admin-stats.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  initNotepad();
+  initStats();
+  populateLanding();
+  buildCatTabs();
+  buildTabsEditor();
+  buildSectionTitlesEditor();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F7F3EC">
+  <title>享．奇果 — Seasonal Menu</title>
+
+  <!-- SEO -->
+  <meta name="description" content="享·奇果 EnjoyKigo — 精選當季咖啡、茶飲與手作甜點。每日限量，慢慢享受。">
+  <meta name="keywords" content="享奇果,EnjoyKigo,咖啡,甜點,茶飲,季節菜單,手作蛋糕,台灣咖啡廳">
+  <meta name="author" content="EnjoyKigo">
+  <meta name="robots" content="index, follow">
+  <meta name="color-scheme" content="only light">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="restaurant.menu">
+  <meta property="og:title" content="享．奇果 — Seasonal Menu">
+  <meta property="og:description" content="精選當季咖啡、茶飲與手作甜點。每日限量，慢慢享受。">
+  <meta property="og:image" content="https://sandywow.github.io/kigoMenu/src/lemon%20pound.jpg">
+  <meta property="og:url" content="https://sandywow.github.io/kigoMenu/">
+  <meta property="og:locale" content="zh_TW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="享．奇果 — Seasonal Menu">
+  <meta name="twitter:description" content="精選當季咖啡、茶飲與手作甜點。每日限量，慢慢享受。">
+  <meta name="twitter:image" content="https://sandywow.github.io/kigoMenu/src/lemon%20pound.jpg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+TC:wght@300;400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════ -->
+<!--  LANDING PAGE                      -->
+<!-- ═══════════════════════════════════ -->
+<section class="page visible" id="landing" aria-label="Welcome">
+
+  <header class="landing-header">
+    <div class="cafe-logo-text" id="cafe-name"></div>
+    <div class="cafe-logo-jp"   id="cafe-sub"></div>
+    <div class="landing-date"   id="landing-date-line"></div>
+  </header>
+
+  <div class="deco-rule"><span>◆</span></div>
+
+  <!-- Hero visual (JS swaps in a real image if heroImage is set) -->
+  <div class="hero-wrapper">
+    <div class="hero-illustrated" id="hero-visual">
+      <svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <ellipse cx="110" cy="165" rx="80" ry="14" fill="rgba(189,153,117,0.18)"/>
+        <ellipse cx="110" cy="163" rx="75" ry="11" fill="rgba(237,229,216,0.9)" stroke="rgba(139,94,60,0.15)" stroke-width="1"/>
+        <rect x="62" y="100" width="96" height="65" rx="4" fill="#E8DCC8"/>
+        <rect x="62" y="100" width="96" height="22" rx="4" fill="#D9CFC0"/>
+        <ellipse cx="110" cy="100" rx="50" ry="10" fill="#F2ECE2"/>
+        <ellipse cx="110" cy="66"  rx="18" ry="20" fill="rgba(200,100,80,0.75)"/>
+        <ellipse cx="110" cy="63"  rx="14" ry="16" fill="rgba(210,115,95,0.6)"/>
+        <path d="M103 58 Q110 52 117 58" stroke="rgba(139,94,60,0.5)" stroke-width="1" fill="none"/>
+        <ellipse cx="96"  cy="56" rx="8" ry="4" fill="rgba(122,125,92,0.65)" transform="rotate(-30,96,56)"/>
+        <ellipse cx="124" cy="56" rx="8" ry="4" fill="rgba(122,125,92,0.55)" transform="rotate(30,124,56)"/>
+        <circle cx="80"  cy="92" r="5" fill="rgba(242,236,226,0.9)"/>
+        <circle cx="140" cy="90" r="4" fill="rgba(242,236,226,0.8)"/>
+        <circle cx="158" cy="96" r="3" fill="rgba(242,236,226,0.7)"/>
+        <circle cx="62"  cy="96" r="3" fill="rgba(242,236,226,0.7)"/>
+        <line x1="165" y1="110" x2="165" y2="155" stroke="rgba(139,94,60,0.4)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M162 110 L162 120 M165 110 L165 120 M168 110 L168 120 M162 120 Q165 126 168 120" fill="none" stroke="rgba(139,94,60,0.4)" stroke-width="1.2"/>
+        <ellipse cx="48"  cy="72"  rx="5" ry="3"   fill="rgba(237,232,154,0.5)"  transform="rotate(-20,48,72)"/>
+        <ellipse cx="172" cy="80"  rx="4" ry="2.5" fill="rgba(164,168,120,0.4)"  transform="rotate(15,172,80)"/>
+        <ellipse cx="38"  cy="130" rx="3" ry="2"   fill="rgba(237,232,154,0.35)" transform="rotate(40,38,130)"/>
+        <ellipse cx="185" cy="120" rx="4" ry="2"   fill="rgba(164,168,120,0.3)"  transform="rotate(-10,185,120)"/>
+      </svg>
+    </div>
+    <div class="seasonal-badge" id="hero-badge"></div>
+    <div class="hero-caption">
+      <h2 id="hero-title"></h2>
+      <p  id="hero-subtitle"></p>
+    </div>
+  </div>
+
+  <!-- Tagline -->
+  <div class="tagline-block">
+    <p id="landing-tagline"></p>
+    <span class="jp" id="landing-tagline-jp"></span>
+  </div>
+
+  <!-- Today's recommendation card -->
+  <div class="seasonal-card" id="seasonal-card">
+    <div class="card-label"       id="card-label-text"></div>
+    <div class="card-item-name"   id="card-name"></div>
+    <div class="card-item-name-jp" id="card-name-jp"></div>
+    <p   class="card-desc"        id="card-desc"></p>
+    <div class="card-price">
+      <span id="card-price"></span>
+      <span class="card-tag" id="card-tag"></span>
+    </div>
+  </div>
+
+  <!-- Seasonal banner -->
+  <div class="banner-section" id="banner-section">
+    <div class="banner-label" id="banner-label-text"></div>
+    <div id="banner-display"></div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-wrapper">
+    <button class="btn-menu" id="cta-btn" onclick="showMenu()"></button>
+    <span class="btn-hint" id="cta-hint"></span>
+  </div>
+
+  <footer class="landing-footer" id="landing-footer">
+    <span id="footer-left"></span>
+    <span id="footer-right"></span>
+  </footer>
+
+</section>
+
+
+<!-- ═══════════════════════════════════ -->
+<!--  MENU PAGE                         -->
+<!-- ═══════════════════════════════════ -->
+<section class="page hidden" id="menu-page" aria-label="Full Menu">
+
+  <div class="menu-header">
+    <div class="menu-header-top">
+      <button class="back-btn" onclick="showLanding()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        返回
+      </button>
+      <div style="text-align:right" id="menu-logo-wrap"></div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="menu-title"    id="menu-title-text"></div>
+      <div class="menu-subtitle" id="menu-subtitle-text"></div>
+    </div>
+  </div>
+
+  <!-- Sticky tab bar (populated by JS from tabs config) -->
+  <nav class="tab-bar" id="tab-bar" role="tablist"></nav>
+
+  <!-- Menu items injected here by renderSection() -->
+  <div id="menu-content"></div>
+
+</section>
+
+
+<!-- ═══════════════════════════════════ -->
+<!--  ORDER SUCCESS PAGE                -->
+<!-- ═══════════════════════════════════ -->
+<section class="page hidden" id="order-success-page" aria-label="Order Success">
+  <div class="receipt-wrapper">
+    <div class="receipt-card">
+      <div class="receipt-check">✓</div>
+      <div class="receipt-title">訂單送出成功</div>
+      <p class="receipt-note">我們已收到您的訂單，請稍後片刻(˶• ֊ •˶)<br>若需加點，可返回菜單再次點餐。</p>
+
+      <div class="deco-rule"><span>◆</span></div>
+
+      <div class="receipt-meta">
+        <div class="receipt-meta-row"><span>訂單編號</span><span id="receipt-order-id"></span></div>
+        <div class="receipt-meta-row"><span>點餐時間</span><span id="receipt-order-time"></span></div>
+        <div class="receipt-meta-row"><span>桌號</span><span id="receipt-table-number"></span></div>
+      </div>
+
+      <div class="receipt-items" id="receipt-items"></div>
+
+      <div class="receipt-total">
+        <span>訂單總金額</span>
+        <span id="receipt-total"></span>
+      </div>
+    </div>
+
+    <button type="button" class="receipt-back-btn" onclick="backToMenuFromSuccess()">返回菜單</button>
+  </div>
+</section>
+
+<div id="item-option-backdrop" class="option-backdrop" onclick="closeAddToCartModal()"></div>
+<div id="item-option-modal" class="option-modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="option-card">
+    <div class="option-header">
+      <div class="option-header-main">
+        <div class="option-item-name modal-item-name"></div>
+        <div class="option-item-unit-price modal-item-unit-price"></div>
+      </div>
+      <button class="option-close" type="button" onclick="closeAddToCartModal()">✕</button>
+    </div>
+    <div class="modal-item-image-wrap" style="display:none">
+      <img class="modal-item-image" src="" alt="">
+    </div>
+    <div class="option-body">
+      <div id="modal-temp-picker"></div>
+      <div class="option-row option-qty-row">
+        <div class="option-field-label">數量</div>
+        <div class="qty-controls">
+          <button type="button" onclick="changeModalQty(-1)">-</button>
+          <input id="modal-qty-input" type="number" min="1" value="1" oninput="updateModalTotal()">
+          <button type="button" onclick="changeModalQty(1)">+</button>
+        </div>
+      </div>
+      <div class="option-row">
+        <div class="option-field-label">總金額</div>
+        <div class="option-field-value modal-item-price"></div>
+      </div>
+    </div>
+    <div class="option-actions">
+      <button type="button" class="option-cancel" onclick="closeAddToCartModal()">取消</button>
+      <button type="button" class="option-confirm" onclick="confirmAddToCart()">加入購物車</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/menu.js"></script>
+<!-- Cart UI -->
+<button id="cart-button" class="cart-button" onclick="toggleCart()" aria-label="購物車">🛒 <span id="cart-count">0</span></button>
+<div id="cart-backdrop" class="cart-backdrop" onclick="closeCart()"></div>
+<aside id="cart-drawer" class="cart-drawer" aria-hidden="true">
+  <header class="cart-header">
+    <h3>購物車</h3>
+    <button class="cart-close" onclick="closeCart()">✕</button>
+  </header>
+  <div id="cart-items" class="cart-items"></div>
+  <div class="cart-footer">
+    <div class="cart-total">總計: <span id="cart-total">NT$0</span></div>
+    <div class="cart-actions">
+      <button class="cart-clear" onclick="clearCart()">清空</button>
+      <button class="cart-submit" onclick="submitOrder()">送出訂單</button>
+    </div>
+  </div>
+</aside>
+</body>
+</html>
