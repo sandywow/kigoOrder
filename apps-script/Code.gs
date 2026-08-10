@@ -25,6 +25,11 @@
  *   POST {action:'clearToday', confirm:'CLEAR_TODAY'} → 清空今天所有訂單
  */
 
+// /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
+// 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
+// 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
+var CODE_VERSION = 2;   // v2: 新增 paymentStatus 付款狀態
+
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
 // quantity   = 售出數量（含招待）
@@ -98,7 +103,12 @@ function doGet(e) {
         orders: listOrders(params.scope, params.date)
       });
     }
-    return jsonResponse({ ok: true, message: 'Kigo order API is running.' });
+    return jsonResponse({
+      ok: true,
+      message: 'Kigo order API is running.',
+      version: CODE_VERSION,
+      headers: SHEET_HEADERS
+    });
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
   }
