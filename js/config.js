@@ -292,7 +292,7 @@ const landingData = {
   footerRight: null,
   menuTitle: "今日菜單",
   menuSubtitle: "Summer 2026",
-  orderEndpoint: "https://script.google.com/macros/s/AKfycbzLR-b2yaXXE_PKvgsSKUVtPBQbdwbPrL9aPdVRlUnpLOedsqetXV9K6Vi8i0_SeOM5/exec"
+  orderEndpoint: "https://script.google.com/macros/s/AKfycby4GAEoCpwSKlcLXg-wYLo7EfZOKVX0vV6FnexownNbZKD2MR0k0nN0zvd7Hmjog0t2/exec"
 };
 
 const tabs = [
