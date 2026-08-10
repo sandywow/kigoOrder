@@ -149,9 +149,16 @@ function openConfigModal() {
     return 'const sectionTitles = {\n' + entries.join(',\n') + '\n};';
   }
 
+  // 訂單 API 欄位留空代表「沿用 config.js 寫死的網址」（見 admin-data.js 的 mergeLanding）。
+  // 但匯出時若照樣寫成 null，貼回 config.js 就會把那個網址清掉，前台從此送不出訂單。
+  // 所以這裡要把原始的 config.js 值補回去 —— 全域的 landingData 沒被後台動過，就是檔案裡的內容。
+  // 其他欄位的 null 是真的「不顯示」，維持原樣。
+  const exported = Object.assign({}, state.landingData);
+  if (exported.orderEndpoint == null) exported.orderEndpoint = landingData.orderEndpoint;
+
   const content = [
     renderMenuData(state.menuData),
-    renderLanding(state.landingData),
+    renderLanding(exported),
     renderTabs(state.tabs),
     renderSectionTitles(state.sectionTitles)
   ].join('\n\n');
