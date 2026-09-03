@@ -56,6 +56,7 @@ function populateLanding() {
     if (el) el.value = ve(ld[k]);
   });
   document.getElementById('ld-bannerImages').value = Array.isArray(ld.bannerImages) ? ld.bannerImages.filter(Boolean).join('\n') : '';
+  document.getElementById('ld-tableNumbers').value = Array.isArray(ld.tableNumbers) ? ld.tableNumbers.filter(Boolean).join('\n') : '';
   document.getElementById('ld-showDate').checked          = !!ld.showDate;
   document.getElementById('ld-bannerPlaceholder').checked = !!ld.bannerPlaceholder;
   document.getElementById('ld-hideHero').checked           = !!ld.hideHero;
@@ -103,6 +104,7 @@ function readLanding() {
     footerRight:     t('footerRight'),
     menuTitle:       t('menuTitle'),
     menuSubtitle:    t('menuSubtitle'),
+    tableNumbers:    multi('tableNumbers'),
     orderEndpoint:   t('orderEndpoint'),
   };
 }

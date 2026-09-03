@@ -1054,6 +1054,103 @@ body::before {
 .option-cancel { background: var(--parchment); color: var(--ink); }
 .option-confirm { background: var(--caramel); color: var(--cream); }
 
+/* ═══════════════════════════════════
+   入座資訊（桌號／暱稱／備註）
+   ═══════════════════════════════════ */
+.seating-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.seating-required {
+  font-size: 11px;
+  color: #d94f4f;
+  margin-left: 4px;
+}
+.seating-optional {
+  font-size: 11px;
+  color: var(--ink-faint);
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+/* 桌號用大方塊而不是下拉選單：手機上單手就能點中，不用先展開再選 */
+.seating-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 8px;
+}
+.seating-table {
+  min-height: 46px;
+  border: 1px solid var(--beige);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.seating-table:hover { border-color: var(--caramel-lt); }
+.seating-table.selected {
+  background: var(--caramel);
+  border-color: var(--caramel);
+  color: var(--cream);
+}
+.seating-error {
+  font-size: 12px;
+  color: #d94f4f;
+  min-height: 16px;
+}
+
+.seating-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--beige);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 15px;   /* 小於 16px 時 iOS Safari 會在聚焦時自動放大整頁 */
+}
+.seating-input:focus {
+  outline: none;
+  border-color: var(--caramel-lt);
+}
+.seating-textarea {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.6;
+}
+.seating-counter {
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+  opacity: 0.7;
+}
+
+/* 菜單頁上的桌號提示，點一下可以改 */
+.seating-chip {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--beige);
+  border-radius: 20px;
+  background: var(--white);
+  color: var(--ink-soft);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.seating-chip-edit {
+  color: var(--caramel);
+  border-left: 1px solid var(--beige);
+  padding-left: 8px;
+}
+
 @keyframes floatY {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-10px); }
@@ -1123,6 +1220,16 @@ body::before {
   color: var(--ink);
   letter-spacing: 0.02em;
   text-align: right;
+}
+/* 備註可能是很長一段字，讓它換行而不是把收據撐開。
+   要放在 .receipt-meta-row 之後 —— 兩者選擇器權重相同，靠順序決勝負。 */
+.receipt-meta-note {
+  align-items: flex-start;
+}
+.receipt-meta-note span:last-child {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 68%;
 }
 .receipt-items {
   text-align: left;

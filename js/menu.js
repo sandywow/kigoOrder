@@ -14,9 +14,132 @@
 })();
 
 /* ═════════════════════
+   入座資訊（桌號／暱稱／備註）
+   ═════════════════════ */
+// 用 sessionStorage 而不是 localStorage：桌號只在這次來店有效。
+// 存到 localStorage 的話，客人下次來會沿用上次的桌號，送出的單就會送錯桌。
+const SEATING_KEY = 'kigoSeating';
+
+let seating = null;          // { tableNumber, nickname, note }
+let seatingDraftTable = null;  // 表單上「已選但還沒按確認」的桌號
+let seatingOnConfirm = null;   // 確認後要做的事（第一次是進菜單，之後是單純修改）
+
+function loadSeating() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(SEATING_KEY));
+    if (stored && stored.tableNumber) seating = stored;
+  } catch (e) {}
+}
+
+function saveSeating() {
+  try { sessionStorage.setItem(SEATING_KEY, JSON.stringify(seating)); } catch (e) {}
+}
+
+function tableOptions() {
+  const list = Array.isArray(landingData.tableNumbers) ? landingData.tableNumbers.filter(Boolean) : [];
+  return list.map(String);
+}
+
+function paintSeatingTables() {
+  const wrap = document.getElementById('seating-tables');
+  if (!wrap) return;
+  const options = tableOptions();
+
+  if (!options.length) {
+    // 桌號清單被清空時還是要能點餐，退回讓客人自己輸入
+    wrap.innerHTML = `<input class="seating-input" id="seating-table-free" type="text" maxlength="20"
+      placeholder="請輸入桌號" value="${seatingDraftTable ? escAttr(seatingDraftTable) : ''}"
+      oninput="setSeatingTable(this.value)">`;
+    return;
+  }
+
+  // 桌號字串要先 JSON.stringify 成 JS 字面值，再 escAttr 把引號轉成實體 ——
+  // 直接放進 onclick="..." 的話，值裡的雙引號會把屬性截斷。
+  wrap.innerHTML = options.map(t => `
+    <button type="button" class="seating-table${t === seatingDraftTable ? ' selected' : ''}"
+            role="radio" aria-checked="${t === seatingDraftTable}"
+            onclick="setSeatingTable(${escAttr(JSON.stringify(t))}, true)">${escHtml(t)}</button>`).join('');
+}
+
+function setSeatingTable(value, repaint) {
+  seatingDraftTable = String(value || '').trim() || null;
+  if (seatingDraftTable) document.getElementById('seating-error').textContent = '';
+  if (repaint) paintSeatingTables();
+}
+
+// 第一次進菜單一定要填，所以不給取消；之後從桌號按鈕進來只是修改，可以取消。
+function openSeatingForm(onConfirm) {
+  seatingOnConfirm = typeof onConfirm === 'function' ? onConfirm : null;
+  const first = !seating;
+
+  seatingDraftTable = seating ? seating.tableNumber : null;
+  document.getElementById('seating-nickname').value = seating ? (seating.nickname || '') : '';
+  document.getElementById('seating-note').value = seating ? (seating.note || '') : '';
+  document.getElementById('seating-error').textContent = '';
+  updateNoteCount();
+  paintSeatingTables();
+
+  document.getElementById('seating-title').textContent = first ? '入座資訊' : '修改入座資訊';
+  document.querySelector('#seating-modal .option-confirm').textContent = first ? '開始點餐' : '儲存';
+  // 還沒填過就沒有「取消」這條路 —— 關掉了會停在一個沒有桌號的菜單
+  document.getElementById('seating-close').style.display = first ? 'none' : '';
+  document.getElementById('seating-cancel').style.display = first ? 'none' : '';
+
+  document.getElementById('seating-backdrop').classList.add('open');
+  document.getElementById('seating-modal').classList.add('open');
+  document.getElementById('seating-modal').setAttribute('aria-hidden', 'false');
+}
+
+function closeSeatingForm() {
+  document.getElementById('seating-backdrop').classList.remove('open');
+  document.getElementById('seating-modal').classList.remove('open');
+  document.getElementById('seating-modal').setAttribute('aria-hidden', 'true');
+  seatingOnConfirm = null;
+}
+
+function confirmSeating() {
+  if (!seatingDraftTable) {
+    document.getElementById('seating-error').textContent = '請先選擇桌號';
+    return;
+  }
+  seating = {
+    tableNumber: seatingDraftTable,
+    nickname: document.getElementById('seating-nickname').value.trim(),
+    note: document.getElementById('seating-note').value.trim()
+  };
+  saveSeating();
+  paintSeatingChip();
+
+  const next = seatingOnConfirm;
+  closeSeatingForm();
+  if (next) next();
+}
+
+function updateNoteCount() {
+  const box = document.getElementById('seating-note');
+  const out = document.getElementById('seating-note-count');
+  if (box && out) out.textContent = String(box.value.length);
+}
+
+function paintSeatingChip() {
+  const chip = document.getElementById('seating-chip');
+  if (!chip) return;
+  if (!seating) { chip.style.display = 'none'; return; }
+  chip.style.display = '';
+  const who = seating.nickname ? ` · ${seating.nickname}` : '';
+  chip.innerHTML = `桌號 ${escHtml(seating.tableNumber)}${escHtml(who)} <span class="seating-chip-edit">修改</span>`;
+}
+
+/* ═════════════════════
    PAGE TRANSITIONS
    ═════════════════════ */
 function showMenu(initialKey) {
+  // 桌號是必填的，還沒填就先擋在入座資訊表單，填完再自動進菜單
+  if (!seating) {
+    openSeatingForm(() => showMenu(initialKey));
+    return;
+  }
+
   const key = initialKey || tabs[0].key;
   document.getElementById('landing').classList.replace('visible', 'hidden');
   const menuPage = document.getElementById('menu-page');
@@ -109,6 +232,17 @@ function renderSection(category) {
 /* ═══════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════ */
+// 菜單內容是自己維護的所以直接內插，但暱稱、備註、桌號是客人打的字，
+// 進到 innerHTML 之前一定要跳脫。
+function escHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escAttr(value) {
+  return escHtml(value).replace(/"/g, '&quot;');
+}
+
 function setOrHide(id, val, useInnerHTML = false) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -476,6 +610,17 @@ function receiptItemRow(item) {
 
 let lastOrder = null;
 
+function setReceiptRow(rowId, valueId, value) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  if (value) {
+    document.getElementById(valueId).textContent = value;
+    row.style.display = '';
+  } else {
+    row.style.display = 'none';
+  }
+}
+
 function setReceiptOrderId(orderId) {
   const el = document.getElementById('receipt-order-id');
   if (el) el.textContent = orderId;
@@ -490,6 +635,9 @@ function showOrderSuccess(order, orderIdPending) {
     orderIdPending ? '產生中…' : (order.orderId || '');
   document.getElementById('receipt-order-time').textContent = formatOrderTime(order.createdAt);
   document.getElementById('receipt-table-number').textContent = order.tableNumber || '—';
+  // 暱稱和備註沒填就整列不顯示，收據才不會多兩行空的
+  setReceiptRow('receipt-nickname-row', 'receipt-nickname', order.nickname);
+  setReceiptRow('receipt-note-row', 'receipt-note', order.note);
   document.getElementById('receipt-items').innerHTML = order.items.map(receiptItemRow).join('');
   document.getElementById('receipt-total').textContent = 'NT$' + order.total;
 
@@ -509,6 +657,13 @@ function backToMenuFromSuccess() {
 
 function submitOrder() {
   if (!cart.length) { showToast('購物車為空'); return; }
+  // 正常流程進菜單前就填過了，這裡是保險：分頁還原、sessionStorage 被清掉時
+  // 還是要有桌號才能送單，否則店家收到一張不知道要送去哪的訂單
+  if (!seating) {
+    closeCart();
+    openSeatingForm(() => submitOrder());
+    return;
+  }
   const orderItems = cart.map(c => {
     const item = (menuData[c.cat] || [])[c.idx] || {};
     return {
@@ -523,7 +678,9 @@ function submitOrder() {
   const payload = {
     orderId: generateOrderId(),
     createdAt: new Date().toISOString(),
-    tableNumber: null, // 桌號功能尚未實作，先預留欄位
+    tableNumber: seating ? seating.tableNumber : null,
+    nickname: seating ? seating.nickname : '',
+    note: seating ? seating.note : '',
     total,
     items: orderItems,
     meta: {
@@ -670,6 +827,14 @@ function initLanding() {
   }
 
   buildTabs();
+
+  /* ── 入座資訊 ── */
+  // 同一次來店中重新整理頁面時，桌號要還在，不要叫客人重填一次
+  // （sessionStorage 會在分頁關閉時清掉，下次來店就是全新的）
+  loadSeating();
+  paintSeatingChip();
+  const noteBox = document.getElementById('seating-note');
+  if (noteBox) noteBox.addEventListener('input', updateNoteCount);
 
   /* ── Apply visibility flags from landingData ── */
   const landing = document.getElementById('landing');

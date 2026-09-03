@@ -665,6 +665,22 @@
       line-height: 1.8;
       padding: 4px 0;
     }
+    /* 客人自己填的備註 —— 忙的時候最容易漏看，所以給它底色讓它跳出來 */
+    .order-note {
+      padding: 0 14px 10px;
+      font-size: 12px;
+      color: var(--ink-soft);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .order-card .order-note {
+      margin: 0 14px 10px;
+      padding: 7px 10px;
+      background: rgba(224,169,59,0.12);
+      border-left: 2px solid #E0A93B;
+      border-radius: 3px;
+    }
     .order-changelog {
       padding: 0 14px 10px;
       font-size: 11px;
@@ -1312,10 +1328,21 @@
   </div>
 
   <div class="section-card">
+    <div class="section-card-title">桌號清單</div>
+    <div class="section-fields">
+      <div class="section-note">客人進菜單前要先選桌號（必選）。一行一個，可以放任何文字，例如加一個「外帶」。留空的話會改成讓客人自己輸入。</div>
+      <div class="field">
+        <label>桌號 <span class="hint">（一行一個）</span></label>
+        <textarea id="ld-tableNumbers" rows="6" placeholder="1&#10;2&#10;3&#10;外帶"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
     <div class="section-card-title">訂單 API</div>
     <div class="section-fields">
       <div class="field">
-        <label>訂單 API Endpoint <span class="hint">（Google Apps Script 部署後的 /exec 網址，留空則只存在本機瀏覽器）</span></label>
+        <label>訂單 API Endpoint <span class="hint">（Google Apps Script 部署後的 /exec 網址，留空則沿用 config.js 裡的設定）</span></label>
         <input type="text" id="ld-orderEndpoint" placeholder="https://script.google.com/macros/s/xxxx/exec">
       </div>
     </div>
