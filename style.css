@@ -1247,6 +1247,40 @@ body::before {
   cursor: pointer;
 }
 
+/* ─── Session 過期 ───
+   蓋住整個畫面、也蓋在購物車跟各種 modal 之上（z-index 比它們都高），
+   而且沒有關閉的方法 —— 這一層就是要讓舊分頁走不下去。 */
+.session-expired {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--cream);
+  padding: 28px 22px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.session-expired.open { display: flex; }
+.session-expired-card {
+  max-width: 320px;
+}
+.session-expired-title {
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--caramel);
+}
+/* .deco-rule 預設是給頁面用的，左右留白在這張卡片裡會太窄 */
+.session-expired .deco-rule { margin: 16px 0 18px; }
+.session-expired-text {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 14px;
+  line-height: 2;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
 /* ── Visibility overrides (controlled from admin) ── */
 #landing.hide-hero .hero-wrapper { display: none !important; }
 #landing.hide-card #seasonal-card { display: none !important; }

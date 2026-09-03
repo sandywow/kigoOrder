@@ -20,19 +20,64 @@
 // 存到 localStorage 的話，客人下次來會沿用上次的桌號，送出的單就會送錯桌。
 const SEATING_KEY = 'kigoSeating';
 
-let seating = null;          // { tableNumber, nickname }
+// 光靠分頁還不夠：手機上分頁常常開著沒關，隔天回到同一個分頁桌號還在，
+// 單就送去錯的桌了。所以超過這個時間沒動作就重問一次。
+const SEATING_TTL_MS = 2 * 60 * 60 * 1000;   // 2 小時
+
+let seating = null;          // { tableNumber, nickname, savedAt }
 let seatingDraftTable = null;  // 表單上「已選但還沒按確認」的桌號
 let seatingOnConfirm = null;   // 確認後要做的事（第一次是進菜單，之後是單純修改）
+
+function seatingExpired(record) {
+  // 舊格式沒有 savedAt（時效上線前存的），一律當作過期重問，不要沿用不知道多久前的桌號
+  const savedAt = record && Number(record.savedAt);
+  return !savedAt || Date.now() - savedAt > SEATING_TTL_MS;
+}
 
 function loadSeating() {
   try {
     const stored = JSON.parse(sessionStorage.getItem(SEATING_KEY));
-    if (stored && stored.tableNumber) seating = stored;
+    if (stored && stored.tableNumber && !seatingExpired(stored)) seating = stored;
+    else if (stored) sessionStorage.removeItem(SEATING_KEY);
   } catch (e) {}
 }
 
 function saveSeating() {
+  if (seating) seating.savedAt = Date.now();
   try { sessionStorage.setItem(SEATING_KEY, JSON.stringify(seating)); } catch (e) {}
+}
+
+function clearSeating() {
+  seating = null;
+  try { sessionStorage.removeItem(SEATING_KEY); } catch (e) {}
+  paintSeatingChip();
+}
+
+// 分頁被切回前景、或準備送單時檢查一次 ——
+// 只在載入時檢查是不夠的，分頁擺在背景幾小時再回來根本不會重新載入。
+// 回傳 true 表示已過期、畫面已經被蓋掉，呼叫端接下來什麼都別做。
+function ensureSeatingFresh() {
+  if (!seating || !seatingExpired(seating)) return false;
+  showSessionExpired();
+  return true;
+}
+
+// 這次來店結束了：清掉入座資訊和購物車，蓋上一層走不出去的說明畫面。
+// 不提供「重新選桌號」的入口是刻意的 —— 隔了兩小時以上，人可能早就換位子或離開了，
+// 在舊分頁裡自己改桌號很容易改錯，一定要重新掃桌上的 QR Code 才對得起實際位子。
+// 重新掃描會開新分頁（或重新載入），那時 loadSeating() 讀不到有效資料，就是全新的一次點餐。
+function showSessionExpired() {
+  clearSeating();
+  cart.length = 0;
+  renderCart();
+  closeCart();
+  closeAddToCartModal();
+  closeSeatingForm();
+
+  const overlay = document.getElementById('session-expired');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
 }
 
 function tableOptions() {
@@ -125,6 +170,8 @@ function paintSeatingChip() {
    PAGE TRANSITIONS
    ═════════════════════ */
 function showMenu(initialKey) {
+  // 從成功頁按「返回菜單」時可能已經隔很久了，進菜單前先確認這次點餐還有效
+  if (ensureSeatingFresh()) return;
   // 桌號是必填的，還沒填就先擋在入座資訊表單，填完再自動進菜單
   if (!seating) {
     openSeatingForm(() => showMenu(initialKey));
@@ -647,8 +694,12 @@ function backToMenuFromSuccess() {
 
 function submitOrder() {
   if (!cart.length) { showToast('購物車為空'); return; }
+  // 送單是最不能送錯桌的一刻，這裡再確認一次入座資訊沒過期。
+  // 過期的話畫面會被 session 過期那層蓋掉，這張單就不送了。
+  if (ensureSeatingFresh()) return;
   // 正常流程進菜單前就填過了，這裡是保險：分頁還原、sessionStorage 被清掉時
-  // 還是要有桌號才能送單，否則店家收到一張不知道要送去哪的訂單
+  // 還是要有桌號才能送單，否則店家收到一張不知道要送去哪的訂單。
+  // 這種情況桌號只是沒讀到、東西是客人剛點的，填完就直接幫他送出去。
   if (!seating) {
     closeCart();
     openSeatingForm(() => submitOrder());
@@ -678,6 +729,8 @@ function submitOrder() {
   };
 
   saveOrderToHistory(payload);
+  // 剛送出一單，人顯然還在店裡，時效從現在重新起算，免得續攤加點時被叫去重填
+  saveSeating();
 
   const endpoint = landingData.orderEndpoint;
 
@@ -819,7 +872,7 @@ function initLanding() {
 
   /* ── 入座資訊 ── */
   // 同一次來店中重新整理頁面時，桌號要還在，不要叫客人重填一次
-  // （sessionStorage 會在分頁關閉時清掉，下次來店就是全新的）
+  // （sessionStorage 會在分頁關閉時清掉，超過 SEATING_TTL_MS 也會失效）
   loadSeating();
   paintSeatingChip();
 
@@ -831,3 +884,9 @@ function initLanding() {
 }
 
 document.addEventListener('DOMContentLoaded', initLanding);
+
+// 分頁擺在背景不會重新載入，所以回到前景時補檢查一次入座資訊有沒有過期。
+// 過期就當場蓋上說明畫面，不要等到客人點完一輪按送出才發現白點了。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') ensureSeatingFresh();
+});

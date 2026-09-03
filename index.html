@@ -209,6 +209,19 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════ -->
+<!--  Session 過期（只能重新掃 QR Code） -->
+<!-- ═══════════════════════════════════ -->
+<!-- 沒有任何按鈕是刻意的：舊分頁裡自己改桌號的話，人可能早就換位子或離開了，
+     一定要重新掃桌上的 QR Code，桌號才會跟實際坐的位子對得起來。 -->
+<div id="session-expired" class="session-expired" aria-hidden="true" role="alertdialog" aria-labelledby="session-expired-title">
+  <div class="session-expired-card">
+    <div class="session-expired-title" id="session-expired-title">點餐已逾時</div>
+    <div class="deco-rule"><span>◆</span></div>
+    <p class="session-expired-text">請重新掃描 QR Code 開始點餐</p>
+  </div>
+</div>
+
 <div id="item-option-backdrop" class="option-backdrop" onclick="closeAddToCartModal()"></div>
 <div id="item-option-modal" class="option-modal" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="option-card">
