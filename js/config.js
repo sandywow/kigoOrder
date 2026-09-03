@@ -294,7 +294,7 @@ const landingData = {
   menuSubtitle: "Summer 2026",
   // 客人進菜單前要選的桌號。可以放任何文字，例如加一個「外帶」。
   // 後台「其他設定 → 桌號清單」可以改，一行一個。
-  tableNumbers: ["1","2","3","4","5","6","7","8"],
+  tableNumbers: ["1","2","3","4","吧台"],
   orderEndpoint: "https://script.google.com/macros/s/AKfycby4GAEoCpwSKlcLXg-wYLo7EfZOKVX0vV6FnexownNbZKD2MR0k0nN0zvd7Hmjog0t2/exec"
 };
 

@@ -1062,11 +1062,6 @@ body::before {
   flex-direction: column;
   gap: 8px;
 }
-.seating-required {
-  font-size: 11px;
-  color: #d94f4f;
-  margin-left: 4px;
-}
 .seating-optional {
   font-size: 11px;
   color: var(--ink-faint);
