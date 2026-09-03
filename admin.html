@@ -665,8 +665,10 @@
       line-height: 1.8;
       padding: 4px 0;
     }
+    /* 修改紀錄只出現在「修改訂單」視窗裡 —— 訂單卡上不顯示，
+       改過幾次的單會拖出長長一段文字，把當下要看的品項和金額擠掉 */
     .order-changelog {
-      padding: 0 14px 10px;
+      margin-top: 8px;
       font-size: 11px;
       color: var(--caramel);
       line-height: 1.7;

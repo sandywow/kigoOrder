@@ -62,6 +62,18 @@ function paymentOf(order) {
   return order && order.paymentStatus === 'paid' ? 'paid' : 'unpaid';
 }
 
+// 新的排最上面，忙的時候才不用一直往下捲找最新的單
+function byNewestFirst(a, b) {
+  return new Date(b.receivedAt || b.createdAt) - new Date(a.receivedAt || a.createdAt);
+}
+
+// 只用在「已完成」那一區：東西都做完了，剩下要盯的就是誰還沒付錢，
+// 已結帳的沉到最下面。付款狀態相同時一樣是新的在前。
+function byUnpaidFirst(a, b) {
+  const paidDiff = (paymentOf(a) === 'paid' ? 1 : 0) - (paymentOf(b) === 'paid' ? 1 : 0);
+  return paidDiff || byNewestFirst(a, b);
+}
+
 let todayOrders = [];
 let todayOrdersSignature = '';
 
@@ -156,7 +168,6 @@ function buildOrderCard(order) {
       </div>
       <div class="order-sub">${formatOrderClock(order)} · 桌號 ${order.tableNumber ? esc(order.tableNumber) : '—'}${
         order.nickname ? ` · ${esc(order.nickname)}` : ''}</div>
-      ${order.changeLog ? `<div class="order-changelog">✎ ${esc(order.changeLog)}</div>` : ''}
       <div class="order-items">${itemRows}</div>
       <div class="order-foot">
         <div class="order-total-line">共 ${totalQty} 件${
@@ -171,12 +182,13 @@ function paintTodayOrders() {
   const wrap = document.getElementById('today-orders');
   if (!wrap) return;
 
-  // 新的排最上面，忙的時候才不用一直往下捲找最新的單
-  const sorted = todayOrders.slice().sort(
-    (a, b) => new Date(b.receivedAt || b.createdAt) - new Date(a.receivedAt || a.createdAt));
+  const sorted = todayOrders.slice().sort(byNewestFirst);
 
   const groups = ['new', 'making', 'done'].map(key => {
-    const list = sorted.filter(o => (ORDER_STATUS[o.status] ? o.status : 'new') === key);
+    let list = sorted.filter(o => (ORDER_STATUS[o.status] ? o.status : 'new') === key);
+    // 新訂單和製作中維持時間順序 —— 那兩區是照著順序做事的，
+    // 被付款狀態打亂反而會漏掉先來的單。已完成的才把已結帳的沉到下面。
+    if (key === 'done') list = list.sort(byUnpaidFirst);
     const body = list.length
       ? list.map(buildOrderCard).join('')
       : '<div class="order-group-empty">目前沒有</div>';
@@ -563,8 +575,9 @@ function paintEditOrder() {
     </div>`;
   }).join('');
 
+  // 訂單卡上不再顯示修改紀錄，這裡是唯一看得到的地方
   const changeLog = editingOrder.changeLog
-    ? `<div class="order-edit-meta">修改紀錄：${esc(editingOrder.changeLog)}</div>`
+    ? `<div class="order-changelog">✎ 修改紀錄：${esc(editingOrder.changeLog)}</div>`
     : '';
 
   const statusOptions = ['new', 'making', 'done'].map(s =>
@@ -963,8 +976,7 @@ function paintHistory() {
   }
 
   // 新的排前面，並依日期分組
-  const sorted = historyOrders.slice().sort(
-    (a, b) => new Date(b.receivedAt || b.createdAt) - new Date(a.receivedAt || a.createdAt));
+  const sorted = historyOrders.slice().sort(byNewestFirst);
 
   const groups = new Map();
   sorted.forEach(o => {
@@ -972,7 +984,6 @@ function paintHistory() {
     if (!groups.has(day)) groups.set(day, []);
     groups.get(day).push(o);
   });
-
   let html = '';
   groups.forEach((list, day) => {
     const dayTotal = list.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
@@ -998,7 +1009,6 @@ function paintHistory() {
               ${order.nickname ? `<span>${esc(order.nickname)}</span>` : ''}
             </div>
             <div class="history-items">${items}</div>
-            ${order.changeLog ? `<div class="order-changelog" style="padding:4px 0 0">✎ ${esc(order.changeLog)}</div>` : ''}
           </div>
           <span class="history-amt${payment === 'unpaid' ? ' is-unpaid' : ''}">NT$${Number(order.total) || 0}</span>
           <div class="history-actions">
