@@ -14,13 +14,13 @@
 })();
 
 /* ═════════════════════
-   入座資訊（桌號／暱稱／備註）
+   入座資訊（桌號／暱稱）
    ═════════════════════ */
 // 用 sessionStorage 而不是 localStorage：桌號只在這次來店有效。
 // 存到 localStorage 的話，客人下次來會沿用上次的桌號，送出的單就會送錯桌。
 const SEATING_KEY = 'kigoSeating';
 
-let seating = null;          // { tableNumber, nickname, note }
+let seating = null;          // { tableNumber, nickname }
 let seatingDraftTable = null;  // 表單上「已選但還沒按確認」的桌號
 let seatingOnConfirm = null;   // 確認後要做的事（第一次是進菜單，之後是單純修改）
 
@@ -74,9 +74,7 @@ function openSeatingForm(onConfirm) {
 
   seatingDraftTable = seating ? seating.tableNumber : null;
   document.getElementById('seating-nickname').value = seating ? (seating.nickname || '') : '';
-  document.getElementById('seating-note').value = seating ? (seating.note || '') : '';
   document.getElementById('seating-error').textContent = '';
-  updateNoteCount();
   paintSeatingTables();
 
   document.getElementById('seating-title').textContent = first ? '入座資訊' : '修改入座資訊';
@@ -104,8 +102,7 @@ function confirmSeating() {
   }
   seating = {
     tableNumber: seatingDraftTable,
-    nickname: document.getElementById('seating-nickname').value.trim(),
-    note: document.getElementById('seating-note').value.trim()
+    nickname: document.getElementById('seating-nickname').value.trim()
   };
   saveSeating();
   paintSeatingChip();
@@ -113,12 +110,6 @@ function confirmSeating() {
   const next = seatingOnConfirm;
   closeSeatingForm();
   if (next) next();
-}
-
-function updateNoteCount() {
-  const box = document.getElementById('seating-note');
-  const out = document.getElementById('seating-note-count');
-  if (box && out) out.textContent = String(box.value.length);
 }
 
 function paintSeatingChip() {
@@ -232,7 +223,7 @@ function renderSection(category) {
 /* ═══════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════ */
-// 菜單內容是自己維護的所以直接內插，但暱稱、備註、桌號是客人打的字，
+// 菜單內容是自己維護的所以直接內插，但暱稱和桌號是客人打的字，
 // 進到 innerHTML 之前一定要跳脫。
 function escHtml(value) {
   return String(value == null ? '' : value)
@@ -635,9 +626,8 @@ function showOrderSuccess(order, orderIdPending) {
     orderIdPending ? '產生中…' : (order.orderId || '');
   document.getElementById('receipt-order-time').textContent = formatOrderTime(order.createdAt);
   document.getElementById('receipt-table-number').textContent = order.tableNumber || '—';
-  // 暱稱和備註沒填就整列不顯示，收據才不會多兩行空的
+  // 暱稱沒填就整列不顯示，收據才不會多一行空的
   setReceiptRow('receipt-nickname-row', 'receipt-nickname', order.nickname);
-  setReceiptRow('receipt-note-row', 'receipt-note', order.note);
   document.getElementById('receipt-items').innerHTML = order.items.map(receiptItemRow).join('');
   document.getElementById('receipt-total').textContent = 'NT$' + order.total;
 
@@ -680,7 +670,6 @@ function submitOrder() {
     createdAt: new Date().toISOString(),
     tableNumber: seating ? seating.tableNumber : null,
     nickname: seating ? seating.nickname : '',
-    note: seating ? seating.note : '',
     total,
     items: orderItems,
     meta: {
@@ -833,8 +822,6 @@ function initLanding() {
   // （sessionStorage 會在分頁關閉時清掉，下次來店就是全新的）
   loadSeating();
   paintSeatingChip();
-  const noteBox = document.getElementById('seating-note');
-  if (noteBox) noteBox.addEventListener('input', updateNoteCount);
 
   /* ── Apply visibility flags from landingData ── */
   const landing = document.getElementById('landing');

@@ -1055,17 +1055,16 @@ body::before {
 .option-confirm { background: var(--caramel); color: var(--cream); }
 
 /* ═══════════════════════════════════
-   入座資訊（桌號／暱稱／備註）
+   入座資訊（桌號／暱稱）
    ═══════════════════════════════════ */
 .seating-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.seating-optional {
+.seating-required {
   font-size: 11px;
-  color: var(--ink-faint);
-  opacity: 0.7;
+  color: #d94f4f;
   margin-left: 4px;
 }
 
@@ -1112,18 +1111,6 @@ body::before {
   outline: none;
   border-color: var(--caramel-lt);
 }
-.seating-textarea {
-  resize: vertical;
-  min-height: 72px;
-  line-height: 1.6;
-}
-.seating-counter {
-  font-size: 11px;
-  color: var(--ink-faint);
-  text-align: right;
-  opacity: 0.7;
-}
-
 /* 菜單頁上的桌號提示，點一下可以改 */
 .seating-chip {
   margin-top: 14px;
@@ -1215,16 +1202,6 @@ body::before {
   color: var(--ink);
   letter-spacing: 0.02em;
   text-align: right;
-}
-/* 備註可能是很長一段字，讓它換行而不是把收據撐開。
-   要放在 .receipt-meta-row 之後 —— 兩者選擇器權重相同，靠順序決勝負。 */
-.receipt-meta-note {
-  align-items: flex-start;
-}
-.receipt-meta-note span:last-child {
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 68%;
 }
 .receipt-items {
   text-align: left;

@@ -28,7 +28,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 3;   // v3: 新增 nickname 暱稱、note 備註
+var CODE_VERSION = 3;   // v3: 新增 nickname 暱稱
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -46,7 +46,7 @@ var SHEET_HEADERS = [
   'originalItems', 'updatedAt', 'changeLog',
   'freeQty', 'chargedQty', 'freeAmount',
   'paymentStatus',
-  'nickname', 'note'
+  'nickname'
 ];
 
 // 客人自己填的自由文字，存進試算表前先修掉頭尾空白並限長度。
@@ -57,7 +57,6 @@ function cleanText(value, maxLength) {
 }
 
 var NICKNAME_MAX = 20;
-var NOTE_MAX = 200;
 
 var VALID_STATUS = ['new', 'making', 'done'];
 
@@ -153,7 +152,6 @@ function handleCreateOrder(payload) {
       orderTotal: chargedTotal(items),
       tableNumber: cleanText(payload.tableNumber, 20),
       nickname: cleanText(payload.nickname, NICKNAME_MAX),
-      note: cleanText(payload.note, NOTE_MAX),
       // 補登通常是「已經做好給客人了」才在事後登記，所以允許直接指定狀態；
       // 客人自己送的訂單一律從「新訂單」開始，不接受前端指定。
       status: (payload.manual && VALID_STATUS.indexOf(payload.status) !== -1)
@@ -320,9 +318,8 @@ function handleUpdateOrder(payload) {
       status: first[col('status')] || 'new',
       // 改品項不影響已經收過的錢，付款狀態沿用原本的
       paymentStatus: normalizePayment(first[col('paymentStatus')]),
-      // 客人填的暱稱和備註是他們自己寫的，店家改品項時不該動到
+      // 暱稱是客人自己填的，店家改品項時不該動到
       nickname: first[col('nickname')] || '',
-      note: first[col('note')] || '',
       // 舊訂單沒有 originalItems 的話，把「這次修改前」的內容補存成原始資料
       originalItems: first[col('originalItems')] || JSON.stringify(oldItems),
       updatedAt: new Date(),
@@ -481,8 +478,7 @@ function buildItemRow(ctx, item) {
     item.chargedQty,
     item.freeQty * item.unitPrice,
     ctx.paymentStatus,
-    ctx.nickname,
-    ctx.note
+    ctx.nickname
   ];
 }
 
@@ -598,7 +594,6 @@ function listOrders(scope, dateStr) {
         status: row[col('status')] || 'new',
         paymentStatus: normalizePayment(row[col('paymentStatus')]),
         nickname: row[col('nickname')] || '',
-        note: row[col('note')] || '',
         updatedAt: row[col('updatedAt')] ? toIsoString(row[col('updatedAt')]) : null,
         changeLog: row[col('changeLog')] || '',
         originalItems: parseJsonOrNull(row[col('originalItems')]),

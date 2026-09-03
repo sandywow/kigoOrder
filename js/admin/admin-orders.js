@@ -156,7 +156,6 @@ function buildOrderCard(order) {
       </div>
       <div class="order-sub">${formatOrderClock(order)} · 桌號 ${order.tableNumber ? esc(order.tableNumber) : '—'}${
         order.nickname ? ` · ${esc(order.nickname)}` : ''}</div>
-      ${order.note ? `<div class="order-note">📝 ${esc(order.note)}</div>` : ''}
       ${order.changeLog ? `<div class="order-changelog">✎ ${esc(order.changeLog)}</div>` : ''}
       <div class="order-items">${itemRows}</div>
       <div class="order-foot">
@@ -446,10 +445,9 @@ function openEditOrder(orderId) {
     createdAt: order.createdAt || order.receivedAt,
     tableNumber: order.tableNumber,
     // 以下都是唯讀顯示用。付款狀態由訂單卡上的「結帳」按鈕處理；
-    // 暱稱和備註是客人自己填的，店家不應該在這裡改掉客人寫的東西。
+    // 暱稱是客人自己填的，店家不應該在這裡改掉客人寫的東西。
     paymentStatus: paymentOf(order),
     nickname: order.nickname || '',
-    note: order.note || '',
     changeLog: order.changeLog || '',
     items: (order.items || []).map(i => ({
       name: i.name,
@@ -596,9 +594,7 @@ function paintEditOrder() {
          訂單編號 ${esc(editingOrder.orderId)}　·　桌號 ${editingOrder.tableNumber ? esc(editingOrder.tableNumber) : '—'}${
            editingOrder.nickname ? '　·　' + esc(editingOrder.nickname) : ''}　·　${
            PAYMENT_STATUS[editingOrder.paymentStatus].dot} ${PAYMENT_STATUS[editingOrder.paymentStatus].label}
-       </div>${
-         editingOrder.note ? `<div class="order-edit-meta">📝 客人備註：${esc(editingOrder.note)}</div>` : ''
-       }${changeLog}`;
+       </div>${changeLog}`;
 
   body.innerHTML = `
     ${header}
@@ -1002,7 +998,6 @@ function paintHistory() {
               ${order.nickname ? `<span>${esc(order.nickname)}</span>` : ''}
             </div>
             <div class="history-items">${items}</div>
-            ${order.note ? `<div class="order-note" style="padding:4px 0 0">📝 ${esc(order.note)}</div>` : ''}
             ${order.changeLog ? `<div class="order-changelog" style="padding:4px 0 0">✎ ${esc(order.changeLog)}</div>` : ''}
           </div>
           <span class="history-amt${payment === 'unpaid' ? ' is-unpaid' : ''}">NT$${Number(order.total) || 0}</span>

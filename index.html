@@ -166,7 +166,6 @@
         <div class="receipt-meta-row"><span>點餐時間</span><span id="receipt-order-time"></span></div>
         <div class="receipt-meta-row"><span>桌號</span><span id="receipt-table-number"></span></div>
         <div class="receipt-meta-row" id="receipt-nickname-row"><span>暱稱</span><span id="receipt-nickname"></span></div>
-        <div class="receipt-meta-row receipt-meta-note" id="receipt-note-row"><span>備註</span><span id="receipt-note"></span></div>
       </div>
 
       <div class="receipt-items" id="receipt-items"></div>
@@ -193,20 +192,14 @@
     </div>
     <div class="option-body">
       <div class="seating-field">
-        <div class="option-field-label">桌號<span class="required-mark">＊</span></div>
+        <div class="option-field-label">桌號 <span class="seating-required">必選</span></div>
         <div class="seating-tables" id="seating-tables" role="radiogroup" aria-label="桌號"></div>
         <div class="seating-error" id="seating-error" role="alert"></div>
       </div>
       <div class="seating-field">
-        <label class="option-field-label" for="seating-nickname">暱稱 <span class="seating-optional">可不填</span></label>
+        <label class="option-field-label" for="seating-nickname">暱稱</label>
         <input class="seating-input" id="seating-nickname" type="text" maxlength="20"
                placeholder="方便我們叫號時稱呼你" autocomplete="nickname">
-      </div>
-      <div class="seating-field">
-        <label class="option-field-label" for="seating-note">備註 <span class="seating-optional">可不填</span></label>
-        <textarea class="seating-input seating-textarea" id="seating-note" rows="3" maxlength="200"
-                  placeholder="例如：不要冰塊、少糖、過敏提醒"></textarea>
-        <div class="seating-counter"><span id="seating-note-count">0</span>/200</div>
       </div>
     </div>
     <div class="option-actions">
