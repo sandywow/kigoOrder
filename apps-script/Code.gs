@@ -23,12 +23,17 @@
  *   POST {action:'updateOrder', orderId, items:[...]}  → 修改訂單內容
  *   POST {action:'deleteOrder', orderId}           → 刪除整筆訂單
  *   POST {action:'clearToday', confirm:'CLEAR_TODAY'} → 清空今天所有訂單
+ *
+ * 共同菜單資料（menuWeb / orderWeb 共用）實作在另一個檔案 Menu.gs：
+ *   GET  ?action=menu&site=menuWeb   → 已組裝好的菜單（menuData/landingData/tabs/sectionTitles）
+ *   GET  ?action=menu&site=orderWeb  → 同上，套用 orderWeb 的分站設定
+ *   GET  ?action=menuRaw             → 菜單五張工作表的原始列（後台編輯用）
  */
 
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 3;   // v3: 新增 nickname 暱稱
+var CODE_VERSION = 4;   // v4: 新增共同菜單資料 API（實作在 Menu.gs）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -112,6 +117,13 @@ function doGet(e) {
         ok: true,
         orders: listOrders(params.scope, params.date)
       });
+    }
+    // 共同菜單資料 — 實作在 Menu.gs
+    if (params.action === 'menu') {
+      return jsonResponse(buildMenuPayload(params.site));
+    }
+    if (params.action === 'menuRaw') {
+      return jsonResponse(buildMenuRawPayload());
     }
     return jsonResponse({
       ok: true,
