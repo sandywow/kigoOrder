@@ -467,14 +467,151 @@ function menuSeedSettings() {
 }
 
 // bannerImages 是有順序的清單，所以獨立一張表。
-// menuWeb / orderWeb 目前的輪播內容不同，用 site 欄位分開。
+//
+// site 欄位的用法（2026-09-07 定案）：
+//   both（或留空）→ 共享海報，menuWeb / orderWeb 都會讀到，只要改這一列
+//   menuWeb / orderWeb → 只有那一站要出現的專屬海報
+// 共享內容以 menuWeb 原本的兩張為基準（莊園蘋果冰茶、享・阿芙加朵），兩站就只顯示這兩張。
+// FISH / POTATO 兩站都不再顯示，但用 active=FALSE 下架、不刪列 ——
+// 資料留著，換季要拿回來只要把 active 改成 TRUE。site 仍記著它們原本屬於 orderWeb。
+//
+// sortOrder 是「一條全域順序」，不是各站各自從 10 開始 ——
+// 共享列跟專屬列會被排在同一個清單裡，撞號時 menuBySortOrder 只能退回
+// 試算表的列序（結果雖然穩定，但是隱性的），所以不同列不要給同一個號碼。
+//
+// BNR-003 被移除（它跟 BNR-002 是同一張 AFFOGATO，改成 both 之後就重複了），
+// 這裡的 id 刻意留一個空號，跟線上試算表對得起來，不要為了連號而重新編。
+//
 // 欄位順序：id, image, alt, sortOrder, active, site
 function menuSeedBanners() {
   return [
-    ['BNR-001', menuSeedImage('BANNER apple iced tea-05.jpg'), '莊園蘋果冰茶', 10, true, 'menuWeb'],
-    ['BNR-002', menuSeedImage('BANNER AFFOGATO-04.jpg'),       '享・阿芙加朵', 20, true, 'menuWeb'],
-    ['BNR-003', menuSeedImage('BANNER AFFOGATO-04.jpg'),       '享・阿芙加朵', 10, true, 'orderWeb'],
-    ['BNR-004', menuSeedImage('BANNER FISH-03.jpg'),           '潮汐花事',     20, true, 'orderWeb'],
-    ['BNR-005', menuSeedImage('BANNER POTATO-02.jpg'),         '浮生花事',     30, true, 'orderWeb']
+    ['BNR-001', menuSeedImage('BANNER apple iced tea-05.jpg'), '莊園蘋果冰茶', 10, true, 'both'],
+    ['BNR-002', menuSeedImage('BANNER AFFOGATO-04.jpg'),       '享・阿芙加朵', 20, true, 'both'],
+    ['BNR-004', menuSeedImage('BANNER FISH-03.jpg'),           '潮汐花事',     30, false, 'orderWeb'],
+    ['BNR-005', menuSeedImage('BANNER POTATO-02.jpg'),         '浮生花事',     40, false, 'orderWeb']
   ];
+}
+
+
+/* ═════════════════════════════
+   一次性資料調整（在編輯器手動執行一次）
+   ═════════════════════════════ */
+
+// 把既有的 Banners 資料改成上面 menuSeedBanners() 那份共享設計：
+//   BNR-001 蘋果冰茶  sortOrder 10  site both      active TRUE   ← 兩站共享
+//   BNR-002 AFFOGATO  sortOrder 20  site both      active TRUE   ← 兩站共享
+//   BNR-003                                                      ← 刪列（與 BNR-002 重複）
+//   BNR-004 FISH      sortOrder 30  site orderWeb  active FALSE  ← 下架保留
+//   BNR-005 POTATO    sortOrder 40  site orderWeb  active FALSE  ← 下架保留
+//   BNR-006                                                      ← 刪列（測試資料）
+// 結果：兩站的 API 都只回傳蘋果冰茶、AFFOGATO 這兩張。
+//
+// 為什麼需要這支：setupMenuSheets() 看到工作表已經有資料列就完全不動，
+// 所以改 seed 不會影響線上的舊資料，得另外跑一次搬移。
+//
+// 只處理下面點名的 id，沒點到的列（例如你之後自己加的海報）一律不動。
+// 重複執行是安全的 —— 每次都是把同樣的值寫成同樣的結果，刪過的列第二次找不到就跳過。
+// 從編輯器直接執行即可，不用重新部署 —— 它不經過 doGet/doPost。
+//
+// ⚠ 這支刻意不引用 MENU_SHEET_BANNERS / MENU_BANNERS_HEADERS 這些常數。
+//   它是「貼到編輯器跑一次」的工具，很可能被貼在一支沒有其他菜單程式碼的
+//   空白檔案裡（第一次就是這樣噴 ReferenceError 的），所以不能依賴同專案的其他檔案。
+//   欄位位置改成當場讀標題列，之後有人在中間插欄也不會寫錯格子。
+function migrateBannersToSharedDesign() {
+  var SHEET_NAME = 'Banners';
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    return '這個指令碼沒有綁定試算表（getActiveSpreadsheet() 回傳 null）。\n' +
+           '請從「共同菜單」試算表的『擴充功能 → Apps Script』開啟專案再執行。';
+  }
+
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    return '這份試算表（' + ss.getName() + '）裡沒有 ' + SHEET_NAME + ' 工作表 —— 可能開錯專案／試算表了。';
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return SHEET_NAME + ' 只有標題列，沒有資料可以調整。';
+
+  // 當場讀標題列找欄位，不要寫死欄號
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function (h) {
+    return String(h == null ? '' : h).trim();
+  });
+  var colOf = function (name) { return headers.indexOf(name) + 1; };
+
+  var missing = [];
+  ['id', 'sortOrder', 'active', 'site'].forEach(function (n) {
+    if (colOf(n) < 1) missing.push(n);
+  });
+  if (missing.length) {
+    return SHEET_NAME + ' 的標題列找不到這些欄位：' + missing.join('、') +
+           '\n目前的標題列是：' + headers.join(' | ');
+  }
+
+  var idCol     = colOf('id');
+  var sortCol   = colOf('sortOrder');
+  var activeCol = colOf('active');
+  var siteCol   = colOf('site');
+
+  // BNR-003：跟 BNR-002 同一張 AFFOGATO，BNR-002 改成 both 之後就重複了
+  // BNR-006：驗證兩站同步時暫時加的測試列
+  var removeIds = ['BNR-003', 'BNR-006'];
+
+  // active=false 的列資料還留在表上，只是兩站都讀不到
+  // （buildLandingData 的過濾條件要求 active 為真）。要復活就把 active 改回 TRUE。
+  var updates = {
+    'BNR-001': { sortOrder: 10, site: 'both',     active: true  },   // 共享
+    'BNR-002': { sortOrder: 20, site: 'both',     active: true  },   // 共享
+    'BNR-004': { sortOrder: 30, site: 'orderWeb', active: false },   // 下架保留
+    'BNR-005': { sortOrder: 40, site: 'orderWeb', active: false }    // 下架保留
+  };
+
+  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+  var report = [];
+  var seen = {};
+
+  // 先改值再刪列 —— 反過來做的話後面的列號會位移，改到別人身上
+  ids.forEach(function (cell, i) {
+    var id = String(cell[0] == null ? '' : cell[0]).trim();
+    var patch = updates[id];
+    if (!patch) return;
+    seen[id] = true;
+    sheet.getRange(i + 2, sortCol).setValue(patch.sortOrder);
+    sheet.getRange(i + 2, activeCol).setValue(patch.active);
+    sheet.getRange(i + 2, siteCol).setValue(patch.site);
+    report.push(id + '：site=' + patch.site +
+      '、sortOrder=' + patch.sortOrder +
+      '、active=' + (patch.active ? 'TRUE' : 'FALSE'));
+  });
+
+  // 由下往上刪，否則刪掉一列之後下面的列號會往上跑
+  for (var i = ids.length - 1; i >= 0; i--) {
+    var id = String(ids[i][0] == null ? '' : ids[i][0]).trim();
+    if (removeIds.indexOf(id) < 0) continue;
+    sheet.deleteRow(i + 2);
+    report.push(id + '：已刪除');
+  }
+
+  // 該有的 id 沒找到，通常代表開錯試算表，或那幾列已經被手動改過了
+  var notFound = Object.keys(updates).filter(function (id) { return !seen[id]; });
+  if (notFound.length) report.push('⚠ 沒有找到這幾列，請確認是否開對試算表：' + notFound.join('、'));
+
+  // 收工前把剩下的列印出來，方便直接核對
+  var after = sheet.getLastRow() < 2 ? [] :
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  report.push('');
+  report.push('── 調整後的 ' + SHEET_NAME + '（共 ' + after.length + ' 列）──');
+  after.forEach(function (row) {
+    report.push([
+      row[idCol - 1],
+      'sortOrder=' + row[sortCol - 1],
+      'active=' + (row[activeCol - 1] === true || String(row[activeCol - 1]).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE'),
+      'site=' + row[siteCol - 1]
+    ].join('　'));
+  });
+
+  var msg = report.join('\n');
+  Logger.log(msg);
+  return msg;
 }

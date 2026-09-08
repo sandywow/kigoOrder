@@ -1,15 +1,27 @@
 /* ═════════════════════
    LOAD ADMIN OVERRIDES
    ═════════════════════ */
+// 資料優先順序：Google Sheets（js/menu-api.js）> 這裡的後台 localStorage > js/config.js
+//
+// ⚠ 這支檔案在 js/menu-api.js 之後才執行，所以「遠端已經套好的欄位」要跳過，
+//   不然剛拿到的共同菜單資料會被後台存的舊值原封蓋回去 ——
+//   首頁 banner 就是這樣一直停在 config.js 的 src/BANNER*.jpg。
+//   Sheets 沒有管到的欄位（例如 orderEndpoint、桌號）照舊沿用後台設定。
 (function () {
   var stored = localStorage.getItem('kigoMenuConfig');
   if (!stored) return;
+  var remote = (window.KigoMenuApi && window.KigoMenuApi.remote) || {};
+  var remoteLanding = remote.landingKeys || {};
   try {
     var c = JSON.parse(stored);
-    if (c.menuData)      Object.keys(c.menuData).forEach(function(k) { menuData[k] = c.menuData[k]; });
-    if (c.landingData)   Object.keys(c.landingData).forEach(function(k) { if (c.landingData[k] !== null) landingData[k] = c.landingData[k]; });
-    if (c.tabs)          { tabs.length = 0; c.tabs.forEach(function(t) { tabs.push(t); }); }
-    if (c.sectionTitles) Object.assign(sectionTitles, c.sectionTitles);
+    if (c.menuData && !remote.menuData)
+      Object.keys(c.menuData).forEach(function(k) { menuData[k] = c.menuData[k]; });
+    if (c.landingData)   Object.keys(c.landingData).forEach(function(k) {
+      if (remoteLanding[k]) return;
+      if (c.landingData[k] !== null) landingData[k] = c.landingData[k];
+    });
+    if (c.tabs && !remote.tabs)          { tabs.length = 0; c.tabs.forEach(function(t) { tabs.push(t); }); }
+    if (c.sectionTitles && !remote.sectionTitles) Object.assign(sectionTitles, c.sectionTitles);
   } catch(e) {}
 })();
 
@@ -828,7 +840,17 @@ function initLanding() {
   bannerCarouselImages = Array.isArray(ld.bannerImages) ? ld.bannerImages.filter(Boolean) : [];
   bannerCarouselIndex = 0;
   setOrHide('banner-label-text', ld.bannerLabel);
+
+  // initLanding() 會被重跑（遠端菜單晚一步到就是走這條路）。
+  // 上一輪沒有海報時整個區塊被設成 display:none，這裡不先解除的話，
+  // 遠端補上海報後圖只是畫進一個看不見的容器裡，畫面上永遠不會出現。
+  if (bannerSection) bannerSection.style.display = '';
+
   if (bannerCarouselImages.length) {
+    // 上一輪留下的單張圖／佔位符要清掉，否則會疊在輪播圖底下。
+    // .banner-slide 不能清 —— renderBannerSlide 要靠舊的那張做淡入交接。
+    const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder') : null;
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
     renderBannerSlide(0, true);
     scheduleBannerCarousel();
   } else if (ld.bannerImage) {

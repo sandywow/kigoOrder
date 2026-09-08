@@ -30,6 +30,20 @@
   var appliedSignature = null;
   var pendingPayload = null;   // 有東西在購物車時先擱著，等結完單再套
 
+  /* ── 遠端已經給過哪些資料 ──
+     js/menu.js 的「LOAD ADMIN OVERRIDES」在本檔之後才執行，會把
+     localStorage 的 kigoMenuConfig 無條件寫回這幾個全域結構。
+     沒有這份名單的話，下面①剛套好的遠端資料會被後台舊值原封蓋回去
+     （首頁 banner 就是這樣一直停在 config.js 的圖），
+     而②的 signature 早退又讓遠端資料不會再被套第二次。
+     這個物件的參考會傳給 window.KigoMenuApi.remote，menu.js 讀它來讓路。 */
+  var remote = {
+    menuData: false,
+    tabs: false,
+    sectionTitles: false,
+    landingKeys: {}            // { bannerImages: true, cafeName: true, ... }
+  };
+
   // 這支檔案在 menu.js 之前執行，所以此時 landingData 還沒被後台的
   // localStorage 覆蓋過。後台若改過 API 網址，要自己去讀一次才拿得到。
   function storedEndpoint() {
@@ -60,23 +74,34 @@
     if (payload.menuData && typeof payload.menuData === 'object') {
       Object.keys(menuData).forEach(function (k) { delete menuData[k]; });
       Object.keys(payload.menuData).forEach(function (k) { menuData[k] = payload.menuData[k]; });
+      remote.menuData = true;
     }
 
     if (Array.isArray(payload.tabs) && payload.tabs.length) {
       tabs.length = 0;
       payload.tabs.forEach(function (t) { tabs.push(t); });
+      remote.tabs = true;
     }
 
     if (payload.sectionTitles && typeof payload.sectionTitles === 'object') {
       Object.keys(sectionTitles).forEach(function (k) { delete sectionTitles[k]; });
       Object.keys(payload.sectionTitles).forEach(function (k) { sectionTitles[k] = payload.sectionTitles[k]; });
+      remote.sectionTitles = true;
     }
 
     // 只覆寫 payload 真的有帶的 key。
     // Settings 工作表刻意沒有 orderEndpoint 這一列，所以送單網址不會被清空。
     if (payload.landingData && typeof payload.landingData === 'object') {
       Object.keys(payload.landingData).forEach(function (k) {
+        // bannerImages 跟其他欄位不一樣：它不是 Settings 的某一列，
+        // 而是 Banners 整張工作表算出來的，所以「payload 一定會有這個 key」。
+        // 空陣列代表 Banners 沒有這一站的啟用列 —— 那是「還沒設定」，
+        // 不是「刻意清空」，要留給 config.js 的 fallback。
+        // 真的想關掉整個海報區請用 Settings 的 hideBanner。
+        if (k === 'bannerImages' && Array.isArray(payload.landingData[k]) && !payload.landingData[k].length) return;
+
         landingData[k] = payload.landingData[k];
+        remote.landingKeys[k] = true;
       });
     }
 
@@ -207,5 +232,7 @@
   if (typeof fetch === 'function') refresh();
 
   // 除錯用：Console 打 KigoMenuApi.refresh()
-  window.KigoMenuApi = { refresh: refresh, cacheKey: CACHE_KEY, site: SITE };
+  // remote 給 js/menu.js 判斷「哪些欄位不要再被後台舊值蓋掉」，
+  // 順便也方便在 Console 確認遠端到底套進了什麼。
+  window.KigoMenuApi = { refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote };
 })();
