@@ -28,12 +28,17 @@
  *   GET  ?action=menu&site=menuWeb   → 已組裝好的菜單（menuData/landingData/tabs/sectionTitles）
  *   GET  ?action=menu&site=orderWeb  → 同上，套用 orderWeb 的分站設定
  *   GET  ?action=menuRaw             → 菜單五張工作表的原始列（後台編輯用）
+ *
+ * 菜單寫入實作在另一個檔案 MenuWrite.gs：
+ *   POST {action:'saveMenu', site, tables:{items,itemCategories,categories,settings,banners}}
+ *        → 依 stable key 比對後更新那五張菜單工作表
+ *        （目前是 dryRun 階段：只回報將會改什麼，一個 cell 都不寫）
  */
 
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 4;   // v4: 新增共同菜單資料 API（實作在 Menu.gs）
+var CODE_VERSION = 5;   // v5: 新增菜單寫入 API action=saveMenu（實作在 MenuWrite.gs）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -103,6 +108,14 @@ function doPost(e) {
     if (payload.action === 'clearToday') {
       return handleClearToday(payload);
     }
+    // 菜單寫入 — 實作在 MenuWrite.gs。
+    // ⚠ 這一行必須留在下面的 fallback 之前：fallback 不是「沒有 action」才觸發，
+    //   而是「前面每一個 action 都沒命中」就觸發，所以晚一步就會把菜單資料
+    //   交給 handleCreateOrder 寫進 Orders。
+    if (payload.action === 'saveMenu') {
+      return handleSaveMenu(payload);
+    }
+    // 沒有 action（前台與後台送出的訂單都是這種）→ 建立訂單
     return handleCreateOrder(payload);
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });

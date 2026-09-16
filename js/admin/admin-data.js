@@ -49,6 +49,9 @@ function saveConfig() {
   state.landingData = readLanding();
   localStorage.setItem('kigoMenuConfig', JSON.stringify(state));
   showToast('已儲存！重新整理首頁即可看到更新');
+
+  // 同步到 Sheets 是額外的一步：它自己處理所有錯誤，上面三行的行為完全不變
+  pushMenuToSheets();
 }
 
 function resetConfig() {
@@ -71,8 +74,8 @@ function resetConfig() {
    state.raw 是唯一的真相來源；顯示用的 state.menuData / tabs /
    sectionTitles / landingData 都是從它算出來的，不要反過來。
 
-   ⚠ 這一步只改讀取。saveConfig() 仍然只寫 localStorage，
-     完全沒有任何寫回 Sheets 的動作。
+   ⚠ 寫回試算表在下面的「Google Sheets 寫入層」，
+     它就是靠 state.raw 才知道要更新哪一列、以及哪些欄位要原封保留。
    ═══════════════════════════════════════════════════════════ */
 
 var ADMIN_SITE = 'orderWeb';
@@ -120,6 +123,78 @@ function sheetSiteMatch(value) {
 
 function bySheetSortOrder(a, b) {
   return sheetNumber(a.sortOrder) - sheetNumber(b.sortOrder);
+}
+
+/* ── 海報圖片的路徑格式 ──
+
+   後台的「輪播圖片網址」欄從以前就是填相對路徑（config.js 的預設值與
+   admin.html 的 placeholder 都是 src/BANNER FISH-03.jpg），不是完整網址。
+
+   但 Banners 工作表的儲存格存的是 Menu.gs 的 menuResolveImage 看得懂的值：
+     · 完整網址（http / data:）→ 原樣輸出
+     · 其他 → encodeURI(MENU_IMAGE_BASE + 值)
+
+   ⚠ MENU_IMAGE_BASE 是 'https://sandywow.github.io/kigoMenu/src/' —— 它自己
+     已經以 src/ 結尾。所以儲存格裡的相對寫法是「檔名」，不是「src/檔名」；
+     把 src/ 也寫進去會變成 .../kigoMenu/src/src/xxx.jpg（兩個站都 404）。
+
+   所以後台顯示與儲存格之間要換算：
+     儲存格 'BANNER FISH-03.jpg'                     ↔ 後台 'src/BANNER FISH-03.jpg'
+     儲存格 'https://…/kigoMenu/src/BANNER%20FISH-03.jpg' ↔ 後台 'src/BANNER FISH-03.jpg'
+     儲存格 'https://其他網站/x.jpg'（不在 imageBase 底下）↔ 後台原樣顯示、原樣存回
+
+   前台完全不受影響：它拿到的是 GAS 用 imageBase 組好的完整網址。 */
+
+var BANNER_PATH_PREFIX = 'src/';
+
+function isAbsoluteImagePath(value) {
+  return /^(https?:)?\/\//i.test(value) || value.indexOf('data:') === 0;
+}
+
+// 儲存格的值 → 後台欄位看到的相對路徑
+function bannerDisplayPath(value) {
+  var raw = String(value == null ? '' : value).trim().replace(/\\/g, '/');
+  if (!raw) return '';
+
+  var base = (state.raw && state.raw.imageBase) || '';
+  if (base && raw.indexOf(base) === 0) {
+    // imageBase 底下的圖 → 還原成 src/檔名（順便把 %20 解回空白）
+    return BANNER_PATH_PREFIX + decodeImagePath(raw.substring(base.length));
+  }
+  // 別的網站的圖沒辦法縮短，原樣顯示
+  if (isAbsoluteImagePath(raw)) return raw;
+
+  raw = raw.replace(/^\/+/, '');
+  return (/^src\//i.test(raw)) ? raw : BANNER_PATH_PREFIX + raw;
+}
+
+// 後台欄位的值 → 要寫進儲存格的值
+function bannerSheetPath(display) {
+  var raw = String(display == null ? '' : display).trim().replace(/\\/g, '/');
+  if (!raw) return '';
+
+  // 使用者自己貼的完整網址就原樣存，menuResolveImage 會原樣輸出
+  if (isAbsoluteImagePath(raw)) return raw;
+
+  raw = raw.replace(/^\/+/, '');
+  // imageBase 已經以 src/ 結尾，儲存格只放檔名
+  if (/^src\//i.test(raw)) raw = raw.substring(BANNER_PATH_PREFIX.length);
+  return raw;
+}
+
+// 兩個值講的是不是同一張圖：都換算成儲存格的寫法再比
+function bannerImageKey(value) {
+  return bannerSheetPath(bannerDisplayPath(value));
+}
+
+// 舊資料是 encodeURI 過的（空白變 %20）。decodeURI 遇到壞字串會丟例外，
+// 這種時候原樣用就好，不要讓後台整個炸掉。
+function decodeImagePath(value) {
+  try {
+    return decodeURI(value);
+  } catch (e) {
+    return value;
+  }
 }
 
 /* ── 讀取 ── */
@@ -291,11 +366,12 @@ function landingFromSheets() {
 
   // bannerImages 不是 Settings 的某一列，是 Banners 整張表算出來的。
   // 這裡照前台的規則過濾（active + 這一站），後台的輪播欄才會跟首頁一致；
-  // 完整的六個欄位留在 state.raw.banners，等第 03 步做 Banner 編輯 UI 才用得到。
+  // 完整的六個欄位留在 state.raw.banners，寫回 Sheets 時才有得對照。
   out.bannerImages = state.raw.banners.filter(function (row) {
     return sheetBool(row.active) && sheetSiteMatch(row.site) && sheetText(row.image);
   }).slice().sort(bySheetSortOrder).map(function (row) {
-    return sheetText(row.image);
+    // 後台欄位一律顯示「src/檔名」，不是儲存格裡那串完整網址
+    return bannerDisplayPath(row.image);
   });
 
   return out;
@@ -329,4 +405,740 @@ function repaintAdminMenuUI() {
   if (typeof buildCatTabs === 'function')             buildCatTabs();
   if (typeof buildTabsEditor === 'function')          buildTabsEditor();
   if (typeof buildSectionTitlesEditor === 'function') buildSectionTitlesEditor();
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Google Sheets 寫入層（action=saveMenu）
+
+   saveConfig() 寫完 localStorage 之後，額外把目前的菜單送回試算表。
+   這一段的每一個錯誤都自己吞掉（toast + console），saveConfig() 原本的
+   三行行為完全不受影響 —— 網路斷線、API 沒部署、資料有問題，
+   後台都還是照舊存進 localStorage 並顯示「已儲存」。
+
+   做法是「patch raw rows」而不是「從 UI 重建整張表」：
+   state.raw 是 menuRaw 讀回來的原始列，UI 只顯示其中一部分欄位
+   （note / active / showTemp / site / updatedAt 後台根本沒有欄位），
+   從 UI 重建會把那些欄位洗成空白。所以一律複製 raw 那一列，
+   只覆寫使用者真的能編輯的欄位。
+
+   ⚠ 送出的是完整 snapshot：GAS 端「試算表有、payload 沒有的 key」
+     會被刪除，所以每一張表都必須包含它全部的列。後台看不到的列
+     （下架的商品、menuWeb 專屬的設定與海報）也一定要原封送回去。
+   ═══════════════════════════════════════════════════════════ */
+
+var MENU_PUSH_TABLES = ['items', 'itemCategories', 'categories', 'settings', 'banners'];
+
+// GAS 的 Settings 黑名單（MENU_WRITE_SETTING_KEY_BLOCKLIST）。
+// 前台送單／取菜單的網址留在各站的 config.js 管理，不可以寫進 Settings。
+var MENU_PUSH_BLOCKED_SETTING_KEYS = ['orderEndpoint', 'menuEndpoint'];
+
+// landingData 有、但不是 Settings 某一列的 key。
+// bannerImages 是 Banners 整張表算出來的（見 landingFromSheets），
+// 它寫回的對象是 Banners，不是 Settings（見 buildBannersTable）。
+var MENU_PUSH_NON_SETTING_KEYS = ['bannerImages'];
+
+// GAS 的 MENU_WRITE_ID_RE。新商品與新海報的 id 必須在這裡就合法，
+// 不然整份 payload 會被退回。
+var MENU_PUSH_ID_RE = /^[A-Za-z0-9_.\-]{1,40}$/;
+
+// menuRaw 會一起回傳 headers，正常情況下用它的；
+// 萬一舊版 GAS 沒帶，就退回這份寫死的（欄位順序與 Menu.gs 一致）。
+var MENU_PUSH_HEADERS_FALLBACK = {
+  items:          ['id', 'name', 'subtitle', 'desc', 'price', 'priceText',
+                   'image', 'tag', 'temp', 'soldOut', 'active', 'note', 'updatedAt'],
+  itemCategories: ['itemId', 'categoryKey', 'sortOrder', 'active'],
+  categories:     ['key', 'label', 'titleEn', 'titleJp', 'sortOrder',
+                   'showTemp', 'active', 'site'],
+  settings:       ['key', 'value', 'scope', 'type', 'note']
+};
+
+function pushHeaders(name) {
+  var h = state.raw && state.raw.headers && state.raw.headers[name];
+  return (Array.isArray(h) && h.length) ? h : MENU_PUSH_HEADERS_FALLBACK[name];
+}
+
+function blankRow(headers) {
+  var row = {};
+  headers.forEach(function (h) { row[h] = ''; });
+  return row;
+}
+
+
+/* ── 進入點 ── */
+
+function pushMenuToSheets() {
+  try {
+    // state.raw 只有在 menuRaw 回來之後才存在（loadState 從 localStorage
+    // 還原時刻意不還原它）。沒有它就沒有完整 snapshot，寧可不送。
+    if (!state.raw || !Array.isArray(state.raw.items) || !Array.isArray(state.raw.categories)) {
+      showToast('菜單資料尚未同步完成，請稍後再儲存');
+      return;
+    }
+
+    var endpoint = adminMenuEndpoint();
+    if (!endpoint) {
+      showToast('找不到菜單 API 網址，這次沒有同步到 Sheets');
+      return;
+    }
+
+    var built = buildMenuTablesFromState();
+
+    built.warnings.forEach(function (w) { console.warn('[admin] ' + w); });
+
+    if (built.errors.length) {
+      console.error('[admin] 菜單無法送出：', built.errors);
+      showToast('菜單無法送出：' + built.errors[0]);
+      return;
+    }
+
+    // 新商品是在上面那一步才拿到 id 的。localStorage 已經在 saveConfig()
+    // 寫過一次（那時候還沒有 id），這裡補寫一次 —— 否則重新整理之後
+    // 這些商品又會變成「沒有 id」，下次儲存就會在試算表再新增一筆。
+    if (built.newIds.length) {
+      localStorage.setItem('kigoMenuConfig', JSON.stringify(state));
+      console.log('[admin] 新商品取得 id：' + built.newIds.join('、'));
+    }
+
+    apiSaveMenu(endpoint, built.tables);
+  } catch (err) {
+    // 最後一道：絕對不讓例外往上丟回 saveConfig()
+    console.error('[admin] pushMenuToSheets 發生例外', err);
+    showToast('菜單同步失敗，詳見 Console');
+  }
+}
+
+// 跟 apiPostOrder 一樣用 text/plain：Apps Script 沒有處理 CORS 預檢(OPTIONS)，
+// 用 application/json 會觸發預檢而直接失敗。
+function apiSaveMenu(endpoint, tables) {
+  if (typeof fetch !== 'function') {
+    showToast('這個瀏覽器不支援同步到 Sheets');
+    return;
+  }
+
+  // 商品陣列包在 tables 裡面（不是頂層的 items）是 GAS 那邊刻意的設計：
+  // 萬一 /exec 還是舊版、沒有 saveMenu 這條路由，請求會落到「建立訂單」的
+  // fallback，而它讀的是 payload.items —— 包一層之後那裡永遠是 undefined，
+  // 只會拿到「order has no items」，菜單資料不會被寫進 Orders。
+  var body = { action: 'saveMenu', site: ADMIN_SITE, tables: tables };
+
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  })
+    .then(function (res) { return res.json(); })
+    .then(function (data) { reportSaveMenuResult(data); })
+    .catch(function (err) {
+      console.error('[admin] saveMenu 失敗', err);
+      showToast('菜單同步失敗，詳見 Console');
+    });
+}
+
+function reportSaveMenuResult(data) {
+  if (!data || typeof data !== 'object') {
+    console.error('[admin] saveMenu 回應格式不對', data);
+    showToast('菜單同步失敗：回應格式不對');
+    return;
+  }
+
+  if (data.ok === false) {
+    var errors = data.errors || (data.error ? [String(data.error)] : []);
+    console.error('[admin] saveMenu 被拒絕', data);
+    // GAS 還沒重新部署時沒有 saveMenu 這條路由，請求會落到建立訂單的 fallback
+    if (errors.join(' ').indexOf('order has no items') >= 0) {
+      showToast('菜單 API 尚未部署新版（GAS 還是舊版），這次沒有寫入');
+      return;
+    }
+    showToast('菜單同步失敗：' + (errors[0] || '未知錯誤'));
+    return;
+  }
+
+  var sum = { updated: 0, added: 0, deleted: 0, skipped: 0, unchanged: 0 };
+  Object.keys(data.written || {}).forEach(function (name) {
+    Object.keys(sum).forEach(function (k) { sum[k] += (data.written[name][k] || 0); });
+  });
+
+  console.log('[admin] saveMenu 結果', data);
+  (data.warnings || []).forEach(function (w) { console.warn('[admin] GAS：' + w); });
+  (data.plan || []).forEach(function (e) {
+    console.log('[admin] · ' + e.op + ' ' + e.table + ' [' + e.key + ']' +
+      (e.row ? ' row=' + e.row : '') + (e.reason ? ' ← ' + e.reason : ''));
+  });
+
+  var counts = '更新 ' + sum.updated + '／新增 ' + sum.added + '／刪除 ' + sum.deleted +
+    (sum.skipped ? '／略過 ' + sum.skipped : '');
+
+  // GAS 端的 MENU_WRITE_ENABLED 還是 false 時只會算計畫、不寫任何 cell
+  showToast(data.dryRun
+    ? '菜單已送出（GAS 目前是預演模式，未實際寫入）：' + counts
+    : '菜單已寫入 Sheets：' + counts);
+}
+
+
+/* ── 組 payload ── */
+
+function buildMenuTablesFromState() {
+  var out = { tables: {}, errors: [], warnings: [], newIds: [] };
+  var raw = state.raw;
+
+  var items = buildItemsTable(raw, out);
+  var links = buildItemCategoriesTable(raw, items.byId, out);
+
+  var tables = {
+    items:          items.rows,
+    itemCategories: links.rows,
+    categories:     buildCategoriesTable(raw, out),
+    settings:       buildSettingsTable(raw, out),
+    banners:        buildBannersTable(raw, out)
+  };
+
+  // 後台的「移除」移除的是分類連結，Items 那一列會留著 ——
+  // 它可能還掛在別的分類，而且 Items 表裡本來就可能有還沒上架的列。
+  Object.keys(items.byId).forEach(function (id) {
+    if (!links.linkedItemIds[id]) {
+      out.warnings.push('商品 ' + id + ' 目前不在任何分類裡，前台不會顯示它，' +
+        '但 Items 工作表仍會保留這一列');
+    }
+  });
+
+  // Banners 整張表都空了：GAS 不接受空陣列，但為了這個極端狀況把整次儲存
+  // 擋掉太超過（其他四張表是好的）。拿掉這個 key，那張工作表這一輪就完全不動。
+  if (!tables.banners.length) {
+    delete tables.banners;
+    out.warnings.push('Banners 這一輪沒有任何列可以送（API 不接受清空整張表），' +
+      'Banners 工作表維持原樣；真的要清空請直接在試算表操作');
+  }
+
+  // GAS 不接受空陣列（分不出「真的要清空整張表」還是「前端出 bug」），
+  // 在這裡就擋下來，才不會送出一份注定被整批退回的 payload
+  MENU_PUSH_TABLES.forEach(function (name) {
+    if (name === 'banners') return;            // 上面已經處理過
+    if (!tables[name] || !tables[name].length) {
+      out.errors.push(name + ' 沒有任何資料，這次不送出');
+    }
+  });
+
+  out.tables = tables;
+  return out;
+}
+
+/* Items —— 複製 raw 那一列，只覆寫後台編輯得到的欄位。
+   active / note / updatedAt 後台沒有欄位，一律沿用原值。 */
+function buildItemsTable(raw, out) {
+  var headers  = pushHeaders('items');
+  var original = {};   // id → 試算表原值（判斷某一份 copy 有沒有被改過）
+  var byId     = {};   // id → 要送出的列
+  var order    = [];   // 維持試算表原本的列序
+  var edited   = {};   // id → 已經套用過「被改過的那一份 copy」
+
+  raw.items.forEach(function (row, i) {
+    var id = sheetText(row.id);
+    if (!id) {
+      out.errors.push('Items 第 ' + (i + 1) + ' 筆沒有 id，請先到試算表補上再儲存');
+      return;
+    }
+    if (byId[id]) {
+      out.errors.push('Items 有重複的 id：' + id + '，請先到試算表處理');
+      return;
+    }
+    original[id] = deepClone(row);
+    byId[id]     = deepClone(row);
+    order.push(id);
+  });
+
+  Object.keys(state.menuData || {}).forEach(function (catKey) {
+    (state.menuData[catKey] || []).forEach(function (item) {
+      var id = sheetText(item.id);
+
+      // 「＋ 新增品項」加出來的沒有 id。發一個新的並寫回 state，
+      // 下一次儲存才會認得它是同一筆、而不是再新增一個。
+      if (!id) {
+        id = nextItemId(byId);
+        item.id      = id;
+        byId[id]     = newItemRow(headers, id);
+        original[id] = null;
+        order.push(id);
+        out.newIds.push(id);
+      }
+
+      if (!byId[id]) {
+        // 畫面上這一筆帶著 Items 快照裡沒有的 id：多半是上一次儲存剛發出去的新商品
+        // （state.raw 要重新整理才會更新），也可能是有人直接在試算表刪掉了那一列。
+        // 兩種情況都當成「要有這一列」把它補回去 —— 絕對不能略過：
+        // 略過等於 snapshot 少一列，GAS 會把試算表上的那一列刪掉。
+        // GAS 是用 id 比對的，試算表已經有同一個 id 就會變成更新而不是新增。
+        out.warnings.push('商品 ' + id + ' 不在 Items 快照裡（重新整理頁面就會同步），' +
+          '這次以新增的一列送出');
+        byId[id]     = newItemRow(headers, id);
+        original[id] = null;
+        order.push(id);
+      }
+
+      var patched = patchItemRow(byId[id], item);
+
+      // 同一個商品掛在多個分類時，畫面上是各自獨立的多份 copy，
+      // 改了其中一份不會同步到另一份。所以只讓「真的被改過的那一份」勝出，
+      // 免得另一個分類的舊值把剛改好的內容蓋回去。
+      var changed = original[id] ? !sameRow(headers, patched, original[id]) : true;
+      if (changed && edited[id]) {
+        out.warnings.push('商品 ' + id + ' 在多個分類裡都被修改過，以最後一個分類的內容為準');
+      }
+      if (changed || !edited[id]) byId[id] = patched;
+      if (changed) edited[id] = true;
+    });
+  });
+
+  return {
+    byId: byId,
+    rows: order.map(function (id) { return byId[id]; }).filter(Boolean)
+  };
+}
+
+function newItemRow(headers, id) {
+  var row = blankRow(headers);
+  row.id      = id;
+  row.active  = true;    // 新商品預設上架
+  row.soldOut = false;
+  return row;
+}
+
+// 後台編輯得到的欄位才覆寫，其他欄位保留 raw 原值
+function patchItemRow(row, item) {
+  var next  = deepClone(row);
+  var price = splitPrice(item.price);
+
+  next.name      = ve(item.name);
+  next.subtitle  = ve(item.nameJp);     // 後台叫 nameJp，試算表的欄位是 subtitle
+  next.desc      = ve(item.desc);
+  next.price     = price.number;
+  next.priceText = price.text;
+  next.image     = ve(item.image);
+  next.tag       = ve(item.tag);
+  next.temp      = ve(item.temp);
+  next.soldOut   = !!item.soldOut;
+  return next;
+}
+
+// 後台的價格是一個純文字欄（displayItem 是 priceText || 'NT$' + price 組出來的），
+// 寫回去要拆成 price(數字) + priceText(文字) 兩欄。
+// 「NT$150」「150」→ price=150；「時價」「兩杯 NT$180」→ 整串放 priceText。
+function splitPrice(display) {
+  var s = String(display == null ? '' : display).trim();
+  if (s === '') return { number: '', text: '' };
+
+  var m = s.match(/^NT\$\s*(\d+(?:\.\d+)?)$/i) || s.match(/^(\d+(?:\.\d+)?)$/);
+  if (m) return { number: Number(m[1]), text: '' };
+
+  return { number: '', text: s };
+}
+
+// 兩列算不算同一份內容。判斷方式要跟 GAS 的 menuWriteCellEquals 一致 ——
+// 勾選框的 true 與文字 "TRUE"、數字 150 與文字 "150" 都算相同。
+function sameRow(headers, a, b) {
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i];
+    var x = a[h];
+    var y = b[h];
+    if (typeof x === 'boolean' || typeof y === 'boolean') {
+      if (sheetBool(x) !== sheetBool(y)) return false;
+      continue;
+    }
+    if (String(x == null ? '' : x).trim() !== String(y == null ? '' : y).trim()) return false;
+  }
+  return true;
+}
+
+// 新商品的 id。沿用試算表現有的 ITM-000 命名，並確認沒有撞號。
+function nextItemId(byId) {
+  var max = 0;
+  Object.keys(byId).forEach(function (id) {
+    var m = String(id).match(/^ITM-(\d+)$/i);
+    if (m) {
+      var n = parseInt(m[1], 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+
+  var id;
+  do {
+    max++;
+    id = 'ITM-' + String(max + 1000).substring(1);   // 001 / 024 / 137
+  } while (byId[id] || !MENU_PUSH_ID_RE.test(id));
+
+  return id;
+}
+
+/* ItemCategories —— 這張表就是「畫面上的分類 × 排序」，所以照 state.menuData
+   重新產生；但每一列仍然是從 raw 原列複製出來的，沒有被覆寫的欄位
+   （目前是 active）維持原值。 */
+function buildItemCategoriesTable(raw, itemsById, out) {
+  var headers  = pushHeaders('itemCategories');
+  var rawByKey = {};
+
+  raw.itemCategories.forEach(function (row, i) {
+    var itemId = sheetText(row.itemId);
+    var catKey = sheetText(row.categoryKey);
+    if (!itemId || !catKey) {
+      out.warnings.push('ItemCategories 第 ' + (i + 1) + ' 筆的 itemId／categoryKey 是空的，' +
+        '這次儲存會把它從試算表刪除');
+      return;
+    }
+    rawByKey[itemId + '|' + catKey] = deepClone(row);
+  });
+
+  var rows          = [];
+  var produced      = {};
+  var linkedItemIds = {};
+
+  Object.keys(state.menuData || {}).forEach(function (catKey) {
+    var list = (state.menuData[catKey] || []).filter(function (item) {
+      var id = sheetText(item.id);
+      return id && itemsById[id];
+    });
+
+    // 排序沒被動過就沿用原本的 sortOrder（10 / 20 / 30 這種留白編號要留著），
+    // 一旦順序變了就整個分類重新編 1..n
+    var keepOrder = keepsExistingOrder(list);
+
+    list.forEach(function (item, idx) {
+      var id   = sheetText(item.id);
+      var k    = id + '|' + catKey;
+      var prev = rawByKey[k];
+      var row  = prev ? deepClone(prev) : blankRow(headers);
+
+      row.itemId      = id;
+      row.categoryKey = catKey;
+      row.sortOrder   = keepOrder ? sheetNumber(item.linkSortOrder) : (idx + 1);
+      if (!prev) row.active = true;    // 新連結預設上架；既有的沿用原值
+
+      rows.push(row);
+      produced[k]       = true;
+      linkedItemIds[id] = true;
+    });
+  });
+
+  // 畫面上沒有的連結 = 這次會被刪掉。刪除是預期行為（後台的「移除」就是這樣），
+  // 但要讓它看得見，不要默默發生。
+  Object.keys(rawByKey).forEach(function (k) {
+    if (!produced[k]) {
+      out.warnings.push('分類連結 ' + k.split('|').join(' → ') +
+        ' 不在目前畫面上，這次儲存會把它從試算表刪除');
+    }
+  });
+
+  return { rows: rows, linkedItemIds: linkedItemIds };
+}
+
+// 每一筆都有 sortOrder 而且嚴格遞增 → 順序沒被動過
+function keepsExistingOrder(list) {
+  var last = null;
+  for (var i = 0; i < list.length; i++) {
+    var v = list[i].linkSortOrder;
+    if (v === undefined || v === null || v === '' || isNaN(Number(v))) return false;
+    var n = Number(v);
+    if (last !== null && n <= last) return false;
+    last = n;
+  }
+  return true;
+}
+
+/* Categories —— 後台只編輯得到 label（分頁編輯器）與 titleEn / titleJp
+   （區塊標題編輯器）。key 是唯讀的，sortOrder / showTemp / active / site
+   後台沒有欄位，一律沿用原值。 */
+function buildCategoriesTable(raw, out) {
+  var labelByKey = {};
+  (state.tabs || []).forEach(function (tab) {
+    var k = sheetText(tab.key);
+    if (k) labelByKey[k] = tab.label;
+  });
+
+  var rows = [];
+  raw.categories.forEach(function (row, i) {
+    var key = sheetText(row.key);
+    if (!key) {
+      out.errors.push('Categories 第 ' + (i + 1) + ' 筆沒有 key，請先到試算表補上再儲存');
+      return;
+    }
+
+    var next = deepClone(row);
+    if (Object.prototype.hasOwnProperty.call(labelByKey, key)) {
+      next.label = ve(labelByKey[key]);
+    }
+    var title = (state.sectionTitles || {})[key];
+    if (title) {
+      next.titleEn = ve(title.en);
+      next.titleJp = ve(title.jp);
+    }
+    rows.push(next);
+  });
+
+  return rows;
+}
+
+/* Settings —— 整張表原封送回，只把後台真的編輯得到的那幾個 key
+   寫回「原本那一列」。
+
+   前台看到的值是 buildLandingData 的結果：scope=both 先套一輪，
+   再讓 scope=orderWeb 覆蓋上去。所以要寫回的是 orderWeb 那一列；
+   只有在沒有 orderWeb 那一列時才寫 both（那一列 menuWeb 也吃得到，
+   等於兩站一起改）。scope=menuWeb 的列原封不動送回去 ——
+   GAS 那邊也是唯讀，會回報 unchanged／skipped。 */
+function buildSettingsTable(raw, out) {
+  var rows      = [];
+  var targetIdx = {};   // key → 要被覆寫的那一列在 rows 裡的位置
+
+  raw.settings.forEach(function (row, i) {
+    var key = sheetText(row.key);
+    if (!key) {
+      out.errors.push('Settings 第 ' + (i + 1) + ' 筆沒有 key，請先到試算表補上再儲存');
+      return;
+    }
+    if (MENU_PUSH_BLOCKED_SETTING_KEYS.indexOf(key) >= 0) {
+      // 這種列 GAS 一定會退回整份 payload。與其把它從 snapshot 拿掉
+      // （那等於要求刪除它），不如直接中止並說清楚。
+      out.errors.push('Settings 工作表裡有 ' + key + ' 這一列，API 不接受它' +
+        '（送單／取菜單網址請留在 config.js），請先到試算表刪掉');
+      return;
+    }
+
+    var scope = sheetText(row.scope) || 'both';
+    rows.push(deepClone(row));
+
+    if (scope === ADMIN_SITE) {
+      targetIdx[key] = rows.length - 1;
+    } else if (scope === 'both' && targetIdx[key] === undefined) {
+      targetIdx[key] = rows.length - 1;
+    }
+    // scope === 'menuWeb' → 原封送回，不當作寫回目標
+  });
+
+  var landing = state.landingData || {};
+  Object.keys(landing).forEach(function (key) {
+    if (MENU_PUSH_BLOCKED_SETTING_KEYS.indexOf(key) >= 0) return;   // orderEndpoint 絕不送出
+    if (MENU_PUSH_NON_SETTING_KEYS.indexOf(key) >= 0) return;       // bannerImages 屬於 Banners
+
+    var idx = targetIdx[key];
+    // Settings 沒有這一列就不新增 —— type 無從判斷，猜錯會讓前台讀到錯的型別。
+    // 這種 key 目前只會出現在 config.js 的預設值裡（例如 bannerAlt）。
+    if (idx === undefined) return;
+
+    rows[idx].value = settingCellValue(rows[idx].type, landing[key]);
+  });
+
+  return rows;
+}
+
+// 依那一列的 type 把 landingData 的值轉回「儲存格該有的樣子」，
+// 對應 Menu.gs 的 settingValue() 的反向操作。
+function settingCellValue(type, value) {
+  var t = String(type == null ? '' : type).trim().toLowerCase() || 'text';
+
+  if (t === 'boolean') {
+    return typeof value === 'boolean' ? value : sheetBool(value);
+  }
+  if (t === 'number') {
+    if (value === null || value === undefined || String(value).trim() === '') return '';
+    var n = Number(value);
+    return isNaN(n) ? '' : n;
+  }
+  if (t === 'list') {
+    // GAS 收到陣列會自己接成「一行一個」的多行字串
+    if (Array.isArray(value)) {
+      return value.map(function (v) { return String(v == null ? '' : v).trim(); })
+        .filter(function (v) { return v !== ''; });
+    }
+    return String(value == null ? '' : value).split(/\r?\n/).map(function (s) {
+      return s.trim();
+    }).filter(function (s) { return s !== ''; });
+  }
+  // text：空白代表「這一項不顯示」，寫空字串回去（不能寫 null）
+  return value === null || value === undefined ? '' : String(value);
+}
+
+/* Banners —— 後台只有「首頁海報圖片」一個多行文字欄（一行一張圖），
+   對應的是 landingFromSheets() 算出來的 bannerImages：
+
+     bannerImages = Banners 裡 active ✕ 這一站 ✕ image 不空白的列，
+                    依 sortOrder 排序後取 image 儲存格的值，
+                    再換算成後台慣用的「src/檔名」（見 bannerDisplayPath）
+
+   所以寫回去時也用同一個條件把「清單代表的那幾列」挑出來，其餘的列
+   （下架的、menuWeb 專屬的、image 空白的）在後台根本看不到，一律原封
+   送回 —— 少送一列 GAS 就會刪掉它，看不到的東西不可以因此消失。
+
+   清單的每一行怎麼對回原本那一列：
+     ① 先用 image 字串完全相同配對（重新排序就是走這條，id / alt 都留著）
+     ② 剩下的行與剩下的列依序配對，當成「這一列的圖片被換掉了」
+        （改檔名時 id / alt / site / active 才不會跟著不見）
+     ③ 還是沒配到的行 → 新增一列；沒配到的列 → 真的從清單移除了 → 刪除 */
+function buildBannersTable(raw, out) {
+  var headers = pushHeaders('banners');
+  var kept    = [];   // 後台看不到、原封送回的列
+  var visible = [];   // 首頁海報欄真正代表的那些列
+  var byId    = {};
+  var used    = {};   // 已經被占用的 sortOrder
+  var maxSort = 0;
+
+  raw.banners.forEach(function (row, i) {
+    var id = sheetText(row.id);
+    if (!id) {
+      out.errors.push('Banners 第 ' + (i + 1) + ' 筆沒有 id，請先到試算表補上再儲存');
+      return;
+    }
+    if (byId[id]) {
+      out.errors.push('Banners 有重複的 id：' + id + '，請先到試算表處理');
+      return;
+    }
+
+    var clone = deepClone(row);
+    byId[id] = clone;
+
+    var n = sheetNumber(row.sortOrder);
+    if (n > maxSort) maxSort = n;
+
+    // 條件跟 landingFromSheets() 一模一樣。menuWeb 專屬的列在這裡就被歸進
+    // kept —— 它不在後台的清單裡，所以既不會被改、也不會被刪
+    // （GAS 端的 locked 規則是第二道保險）。
+    if (sheetBool(row.active) && sheetSiteMatch(row.site) && sheetText(row.image)) {
+      visible.push(clone);
+    } else {
+      kept.push(clone);
+      used[n] = true;
+    }
+  });
+
+  visible.sort(bySheetSortOrder);
+
+  var list = (state.landingData || {}).bannerImages;
+  if (!Array.isArray(list)) {
+    // 後台沒有這個欄位（理論上不會發生）→ 整張表原封送回，不增不刪
+    return kept.concat(visible);
+  }
+  // 後台欄位裡是「src/檔名」，儲存格要的是「檔名」（imageBase 已經含 src/）。
+  // 這裡先全部換算成儲存格的寫法，後面的比對、寫入就都是同一種格式。
+  list = list.map(function (v) { return bannerSheetPath(v); })
+    .filter(function (v) { return v !== ''; });
+
+  /* ── ① image 完全相同 ── */
+  var matched = new Array(list.length);
+  var taken   = {};
+  list.forEach(function (image, i) {
+    for (var j = 0; j < visible.length; j++) {
+      if (taken[j]) continue;
+      // 比對前兩邊都換算成儲存格的寫法，完整網址與相對路徑才不會被當成不同張圖
+      if (bannerImageKey(visible[j].image) === image) {
+        matched[i] = visible[j];
+        taken[j] = true;
+        return;
+      }
+    }
+  });
+
+  /* ── ② 剩下的依序配對：當成「這一列的圖片被換掉了」 ── */
+  var leftover = visible.filter(function (row, j) { return !taken[j]; });
+  var next = 0;
+  list.forEach(function (image, i) {
+    if (matched[i] || next >= leftover.length) return;
+    var row = leftover[next++];
+    out.warnings.push('海報 ' + sheetText(row.id) + ' 的圖片從「' + bannerDisplayPath(row.image) +
+      '」改成「' + bannerDisplayPath(image) + '」（沿用原本的 id / alt / active / site）');
+    matched[i] = row;   // 實際的 image 在最後統一寫入
+  });
+
+  /* ── ③ 沒配到的列 = 真的從清單上被移除了 ── */
+  for (var i = next; i < leftover.length; i++) {
+    out.warnings.push('海報 ' + sheetText(leftover[i].id) + '（' +
+      bannerDisplayPath(leftover[i].image) +
+      '）已經不在首頁海報清單裡，這次儲存會把它從試算表刪除');
+  }
+
+  /* ── 決定 sortOrder ──
+     Banners 的 sortOrder 是一條全域順序（共享列與各站專屬列排在同一個清單裡），
+     所以重編號時要避開 kept 那些列已經用掉的號碼。
+     順序沒被動過、而且新的海報都加在最後面時就完全不重編，避免無謂的更新。 */
+  var keepNumbers = true;
+  var last = null;
+  var sawNew = false;
+  for (var k = 0; k < list.length; k++) {
+    if (!matched[k]) { sawNew = true; continue; }
+    if (sawNew) { keepNumbers = false; break; }    // 新的插在既有的前面
+    var n = sheetNumber(matched[k].sortOrder);
+    if (last !== null && n <= last) { keepNumbers = false; break; }
+    last = n;
+  }
+
+  if (keepNumbers) {
+    // 既有的號碼原封不動，新的接在全表最大號之後
+    matched.forEach(function (row) {
+      if (row) used[sheetNumber(row.sortOrder)] = true;
+    });
+  }
+  var cursor = keepNumbers ? maxSort : 0;
+
+  var rows = kept;
+  list.forEach(function (image, i) {
+    var row = matched[i];
+    if (row) {
+      // 一律存成相對路徑。原本存完整網址的列會在這裡被正規化
+      // （值指的是同一張圖，只是改用 imageBase 補前綴的寫法）。
+      row.image = image;
+      if (!keepNumbers) {
+        cursor = nextFreeSortOrder(used, cursor + 10);
+        row.sortOrder = cursor;
+      }
+      rows.push(row);
+      return;
+    }
+    // 新增的海報。後台沒有 alt / active / site 的欄位，所以給預設值：
+    // 上架、site=both（兩站共用，跟現有的共享海報一致）。
+    // 只想在某一站出現的話，到試算表把那一列的 site 改成 orderWeb / menuWeb。
+    cursor = nextFreeSortOrder(used, cursor + 10);
+    var fresh = newBannerRow(headers, nextBannerId(byId), image, cursor);
+    byId[fresh.id] = fresh;
+    out.newIds.push(fresh.id);
+    rows.push(fresh);
+  });
+
+  return rows;
+}
+
+function newBannerRow(headers, id, image, sortOrder) {
+  var row = blankRow(headers);
+  row.id        = id;
+  row.image     = image;
+  row.alt       = '';
+  row.sortOrder = sortOrder;
+  row.active    = true;
+  row.site      = 'both';        // 兩站共用，跟現有的共享海報一致
+  return row;
+}
+
+// 下一個沒被用掉的 sortOrder（10 的倍數，避開 used 裡已經有的號碼）
+function nextFreeSortOrder(used, from) {
+  var n = from;
+  while (used[n]) n += 10;
+  used[n] = true;
+  return n;
+}
+
+// 新海報的 id。沿用試算表現有的 BNR-000 命名，並確認沒有撞號
+// （BNR-003 是刻意留的空號，所以要從最大號往後找，不能數列數）。
+function nextBannerId(byId) {
+  var max = 0;
+  Object.keys(byId).forEach(function (id) {
+    var m = String(id).match(/^BNR-(\d+)$/i);
+    if (m) {
+      var n = parseInt(m[1], 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+
+  var id;
+  do {
+    max++;
+    id = 'BNR-' + String(max + 1000).substring(1);   // 001 / 024 / 137
+  } while (byId[id] || !MENU_PUSH_ID_RE.test(id));
+
+  return id;
 }
