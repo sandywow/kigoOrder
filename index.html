@@ -124,20 +124,21 @@
 
   <div class="menu-header">
     <div class="menu-header-top">
-      <button class="back-btn" onclick="showLanding()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M19 12H5M12 5l-7 7 7 7"/>
-        </svg>
-        返回
-      </button>
+      <div class="menu-header-left">
+        <button class="back-btn" onclick="showLanding()" aria-label="返回首頁" title="返回首頁">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <!-- 目前的桌號／暱稱，點一下可以改 -->
+        <button type="button" class="seating-chip" id="seating-chip" onclick="openSeatingForm()"></button>
+      </div>
       <div style="text-align:right" id="menu-logo-wrap"></div>
     </div>
     <div style="margin-top:16px">
       <div class="menu-title"    id="menu-title-text"></div>
       <div class="menu-subtitle" id="menu-subtitle-text"></div>
     </div>
-    <!-- 目前的桌號／暱稱，點一下可以改 -->
-    <button type="button" class="seating-chip" id="seating-chip" onclick="openSeatingForm()"></button>
   </div>
 
   <!-- Sticky tab bar (populated by JS from tabs config) -->

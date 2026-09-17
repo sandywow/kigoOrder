@@ -372,7 +372,7 @@ body::before {
    弱化了底色就得靠其他東西撐住可點擊感：夠大的可點面積（整塊 56px 以上）、
    按下去的底色變化、以及框線在 hover / active 時轉成焦糖色。 */
 .cta-wrapper {
-  padding: 20px 20px 22px;
+  padding: 20px 20px 34px;   /* 下緣跟頁首上方的 34px 對齊 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -494,6 +494,12 @@ body::before {
   position: relative;
   width: 100%;
   min-height: 260px;
+  /* 圖片載入前先用目前海報的長寬比把高度佔起來。不佔的話圖一載完，
+     容器會從 260px 撐到 600 多 px，底下的菜單入口與頁尾整個被推下去 ——
+     那個跳動就是「卡頓」的來源之一。
+     載入後 JS 會用真實尺寸覆寫 height（explicit height 優先於 aspect-ratio），
+     所以這個比例只影響「還沒載完」的那幾秒，不會改變最終版面。 */
+  aspect-ratio: 4500 / 7775;
   overflow: hidden;
 }
 .banner-slide {
@@ -584,35 +590,67 @@ body::before {
   justify-content: space-between;
   margin-bottom: 6px;
 }
+/* 返回箭頭與桌號膠囊併成左側一組 */
+.menu-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 .back-btn {
   background: none;
   border: none;
   cursor: pointer;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 15px;
-  color: var(--ink-faint);
-  letter-spacing: 0.2em;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 4px 0;
-  transition: color 0.3s;
 }
-.back-btn:hover { color: var(--caramel); }
-.back-btn svg { width: 16px; height: 16px; }
+
+/* 箭頭的圓底用首頁菜單入口那組印章的顏色，兩頁看起來才是同一套設計。
+   用 content-box：padding 不會把 15px 的圖示本身壓小。 */
+.back-btn svg {
+  width: 15px;
+  height: 15px;
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 50%;
+  background: #A98669;
+  border: 1px solid #A98669;
+  color: var(--cream);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.back-btn:hover svg,
+.back-btn:focus-visible svg,
+.back-btn:active svg {
+  background: #7E6049;
+  border-color: #7E6049;
+}
+
+/* 主標：拉開字距當成報頭來排，下面再收一條會淡出的短線。
+   單靠字級大小撐場面會太平，一條 38px 的細線就足夠讓它有「被設計過」的樣子，
+   而且它剛好也把主標與下面的季節副標分成兩層。 */
 .menu-title {
-  font-family: 'DM Serif Display', serif;
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
   font-size: 32px;
   color: var(--ink);
-  letter-spacing: 0.04em;
-  line-height: 1.1;
+  letter-spacing: 0.14em;
+  line-height: 1.15;
+}
+.menu-title::after {
+  content: '';
+  display: block;
+  width: 2.28em;   /* = 前兩個字的寬度（32px 字 + 0.14em 字距），線剛好收在「日」與「菜」之間 */
+  height: 1px;
+  margin-top: 6px;
+  background: linear-gradient(to right, rgba(184, 132, 90, 0.45) 55%, rgba(184, 132, 90, 0));
 }
 .menu-subtitle {
   font-family: 'Noto Serif TC', serif;
   font-size: 13px;
   color: var(--ink-faint);
-  letter-spacing: 0.25em;
-  margin-top: 6px;
+  letter-spacing: 0.15em;
+  margin-top: 9px;
 }
 
 /* Tab navigation — sticky during scroll */
@@ -866,18 +904,43 @@ body::before {
 }
 
 /* ── Add-to-cart button inside menu item */
-.menu-item-actions { margin-top: 12px; }
-.add-to-cart {
-  background: var(--caramel);
-  color: var(--cream);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 13px;
+/* 價格與加入鍵同一列：價格靠左，一顆圓形的＋跟在後面 */
+.menu-item-price-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
-.add-to-cart:hover { background: var(--ink-soft); }
+.menu-item-price-row .menu-item-price { margin-top: 0; }
+
+/* 圓底的＋，用的是首頁菜單入口那組印章的顏色，全站的圓形按鈕是同一套 */
+.add-to-cart {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--beige);
+  border-radius: 50%;
+  background: var(--parchment);
+  color: #A98669;
+  cursor: pointer;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.add-to-cart svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.add-to-cart:hover,
+.add-to-cart:focus-visible,
+.add-to-cart:active {
+  background: var(--beige);
+  border-color: #A98669;
+  color: #7E6049;
+}
 
 /* ── Floating cart button and drawer */
 .cart-button {
@@ -1178,7 +1241,7 @@ body::before {
 }
 /* 菜單頁上的桌號提示，點一下可以改 */
 .seating-chip {
-  margin-top: 14px;
+  margin: 0;   /* 現在跟返回鍵同一列，不需要自己的上方間距 */
   display: inline-flex;
   align-items: center;
   gap: 8px;

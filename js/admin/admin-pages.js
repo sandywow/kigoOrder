@@ -45,9 +45,7 @@ function buildSectionTitlesEditor() {
 function populateLanding() {
   const ld = state.landingData;
   const textFields = [
-    'cafeName','cafeSub','dateSeasonLabel','heroImage','heroBadge',
-    'heroTitle','heroSubtitle','tagline','taglineJp',
-    'cardLabel','cardName','cardNameJp','cardDesc','cardPrice','cardTag',
+    'cafeName','cafeSub','dateSeasonLabel','tagline','taglineJp',
     'bannerLabel','bannerImage','ctaButton','ctaHint',
     'footerLeft','footerRight','menuTitle','menuSubtitle','orderEndpoint'
   ];
@@ -59,8 +57,6 @@ function populateLanding() {
   document.getElementById('ld-tableNumbers').value = Array.isArray(ld.tableNumbers) ? ld.tableNumbers.filter(Boolean).join('\n') : '';
   document.getElementById('ld-showDate').checked          = !!ld.showDate;
   document.getElementById('ld-bannerPlaceholder').checked = !!ld.bannerPlaceholder;
-  document.getElementById('ld-hideHero').checked           = !!ld.hideHero;
-  document.getElementById('ld-hideCard').checked           = !!ld.hideCard;
   document.getElementById('ld-hideBanner').checked         = !!ld.hideBanner;
 }
 
@@ -73,30 +69,35 @@ function readLanding() {
       .map(s => s.trim())
       .filter(Boolean);
   };
-  return {
+  // 主視覺與今日推薦卡的欄位已經從後台移除（兩站都用不到），但它們在
+  // Settings 工作表與 config.js 裡還有值。這裡原封帶回目前的值 ——
+  // 不帶的話，寫回 Sheets 時那幾列會被當成「沒有設定」而改掉。
+  const keep = k => (state.landingData || {})[k];
+
+  const out = {
     cafeName:        t('cafeName'),
     cafeSub:         t('cafeSub'),
     showDate:        document.getElementById('ld-showDate').checked,
     dateSeasonLabel: t('dateSeasonLabel'),
-    heroImage:       t('heroImage'),
+    heroImage:       keep('heroImage'),
     bannerImages:    multi('bannerImages'),
-    heroBadge:       t('heroBadge'),
-    heroTitle:       t('heroTitle'),
-    heroSubtitle:    t('heroSubtitle'),
+    heroBadge:       keep('heroBadge'),
+    heroTitle:       keep('heroTitle'),
+    heroSubtitle:    keep('heroSubtitle'),
     tagline:         t('tagline'),
     taglineJp:       t('taglineJp'),
-    cardLabel:       t('cardLabel'),
-    cardName:        t('cardName'),
-    cardNameJp:      t('cardNameJp'),
-    cardDesc:        t('cardDesc'),
-    cardPrice:       t('cardPrice'),
-    cardTag:         t('cardTag'),
+    cardLabel:       keep('cardLabel'),
+    cardName:        keep('cardName'),
+    cardNameJp:      keep('cardNameJp'),
+    cardDesc:        keep('cardDesc'),
+    cardPrice:       keep('cardPrice'),
+    cardTag:         keep('cardTag'),
     bannerLabel:     t('bannerLabel'),
     bannerImage:     t('bannerImage'),
     bannerAlt:       state.landingData.bannerAlt || '當季推薦海報',
     bannerPlaceholder: document.getElementById('ld-bannerPlaceholder').checked,
-    hideHero:        document.getElementById('ld-hideHero').checked,
-    hideCard:        document.getElementById('ld-hideCard').checked,
+    hideHero:        keep('hideHero'),
+    hideCard:        keep('hideCard'),
     hideBanner:      document.getElementById('ld-hideBanner').checked,
     ctaButton:       t('ctaButton'),
     ctaHint:         t('ctaHint'),
@@ -107,6 +108,11 @@ function readLanding() {
     tableNumbers:    multi('tableNumbers'),
     orderEndpoint:   t('orderEndpoint'),
   };
+
+  // 值是 undefined 的 key 直接拿掉（例如 config.js 與 Sheets 都沒有 hideCard 時）。
+  // 留著的話寫回 Sheets 會被當成「布林的 false」，隱藏中的區塊會突然跑出來。
+  Object.keys(out).forEach(k => { if (out[k] === undefined) delete out[k]; });
+  return out;
 }
 
 function openConfigModal() {

@@ -283,7 +283,15 @@ function renderSection(category) {
     const nameJpHtml = item.nameJp ? `<div class="menu-item-name-jp">${item.nameJp.replace(/\n/g, '<br>')}</div>` : '';
     const descHtml   = item.desc   ? `<p class="menu-item-desc">${item.desc.replace(/\n/g, '<br>')}</p>` : '';
     const priceHtml  = item.price  ? `<div class="menu-item-price">${item.price}</div>` : '';
-    const addBtn     = item.soldOut ? '' : `<div class="menu-item-actions"><button class="add-to-cart" onclick="addToCart('${category}',${i})">加入購物車</button></div>`;
+    // 加入購物車改成價格後面的一顆圓形＋。沒有文字了，所以 aria-label 要把
+    // 「加入什麼」講清楚，報讀軟體才不會一整排都念成「按鈕」。
+    const addBtn     = item.soldOut ? '' :
+      `<button class="add-to-cart" onclick="addToCart('${category}',${i})"` +
+      ` aria-label="加入購物車：${(item.name || '').replace(/"/g, '&quot;')}" title="加入購物車">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">` +
+      `<path d="M12 6v12M6 12h12"/></svg></button>`;
+    const priceRow   = (priceHtml || addBtn)
+      ? `<div class="menu-item-price-row">${priceHtml}${addBtn}</div>` : '';
 
     html += `
       <div class="menu-item${item.soldOut ? ' menu-item-soldout' : ''}" style="animation-delay:${i * 0.07}s">
@@ -292,8 +300,7 @@ function renderSection(category) {
           ${tagsHtml}
           ${nameJpHtml}
           ${descHtml}
-          ${priceHtml}
-          ${addBtn}
+          ${priceRow}
         </div>
         ${rightBlock}
       </div>`;
@@ -408,6 +415,21 @@ function updateBannerDisplayHeight(bannerDisplay, img) {
   bannerDisplay.style.height = `${height}px`;
 }
 
+
+// 下一張海報先抓起來放進瀏覽器快取。不預載的話，5 秒後切換的那一刻才開始
+// 下載＋解碼 2~3 MB 的圖，淡入會卡住。同一個網址只抓一次，之後由快取供應。
+const bannerPreloaded = new Set();
+
+function preloadNextBanner() {
+  if (bannerCarouselImages.length < 2) return;
+  const next = bannerCarouselImages[(bannerCarouselIndex + 1) % bannerCarouselImages.length];
+  if (!next || bannerPreloaded.has(next)) return;
+  bannerPreloaded.add(next);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = next;
+}
+
 function scheduleBannerCarousel() {
   clearBannerCarousel();
   if (bannerCarouselImages.length < 2) return;
@@ -441,15 +463,24 @@ function renderBannerSlide(index, noFade) {
   slide.className = 'banner-slide';
   slide.dataset.slideIndex = bannerCarouselIndex;
   slide.style.zIndex = previousSlide ? 2 : 1;
-  slide.innerHTML = `<img src="${src}" alt="${landingData.bannerAlt || '當季推薦'}">`;
+  // decoding="async"：4500×7775 的原圖解碼要好幾百毫秒，不丟出主執行緒的話
+  // 那段時間捲動與淡入動畫都會頓。fetchpriority 只給第一張（noFade=首次渲染），
+  // 它是首屏最大的元素，值得插隊。
+  slide.innerHTML = `<img src="${src}" alt="${landingData.bannerAlt || '當季推薦'}"` +
+    ` decoding="async"${noFade ? ' fetchpriority="high"' : ''}>`;
   bannerDisplay.insertBefore(slide, dotsWrapper);
 
   const img = slide.querySelector('img');
   if (img) {
     if (img.complete && img.naturalWidth) {
       updateBannerDisplayHeight(bannerDisplay, img);
+      preloadNextBanner();
     } else {
-      img.addEventListener('load', () => updateBannerDisplayHeight(bannerDisplay, img), { once: true });
+      img.addEventListener('load', () => {
+        updateBannerDisplayHeight(bannerDisplay, img);
+        // 這一張載完才去抓下一張，兩張不會搶頻寬
+        preloadNextBanner();
+      }, { once: true });
     }
   }
 
