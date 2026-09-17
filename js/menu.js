@@ -224,20 +224,42 @@ function switchTab(category, btn) {
 /* ═════════════════════
    RENDER SECTIONS
    ═════════════════════ */
-function tempDots(temp) {
-  const hot   = `<span class="temp-dot temp-dot-hot"></span>`;
-  const cold  = `<span class="temp-dot temp-dot-cold"></span>`;
-  const blank = `<span class="temp-dot temp-dot-blank"></span>`;
-  const h = (temp === 'hot'  || temp === 'both') ? hot  : blank;
-  const c = (temp === 'iced' || temp === 'both') ? cold : blank;
-  return `<div class="temp-dots">${h}${c}</div>`;
+/* 冰熱標示：熱＝♨️ 的三道波、冰＝藍色的雪花，直接跟在品名後面。
+
+   用 inline SVG 而不是直接打 emoji：emoji 的長相與顏色由各家系統的字型
+   決定（而且 ♨️ 一定連下面那個湯池一起出現），顏色也沒辦法自己指定。 */
+
+// ♨️ 的三道波。Twemoji（CC-BY 4.0）原本是「填滿的外框」，粗細綁死在形狀裡
+// 改不了，所以這裡改成描它的中線再用 stroke 畫 —— 起伏的位置與幅度都是從
+// 原路徑兩側取中點算出來的（頂點 10,1 → 最左 8,8 → 最右 13.1,19 → 收尾 9.3,27.4），
+// 波形跟 emoji 一樣，差別只有顏色與現在可以自由調的筆畫粗細。
+var TEMP_ICON_HOT = '<svg class="temp-icon temp-icon-hot" viewBox="6 0 23 28.5" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">' +
+  '<path d="M10 1C10 4 8 5 8 8C8 11.5 13.1 15 13.1 19C13.1 23 11.5 26.5 9.3 27.4"/>' +
+  '<path d="M17 1C17 4 15 5 15 8C15 11.5 20.1 15 20.1 19C20.1 23 18.5 26.5 16.3 27.4"/>' +
+  '<path d="M24 1C24 4 22 5 22 8C22 11.5 27.1 15 27.1 19C27.1 23 25.5 26.5 23.3 27.4"/></svg>';
+
+var TEMP_ICON_COLD = '<svg class="temp-icon temp-icon-cold" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.35" stroke-linecap="round" aria-hidden="true">' +
+  '<path d="M12 2.7L12 21.3M20.05 7.35L3.95 16.65M20.05 16.65L3.95 7.35' +
+  'M12 6.6l2.38-1.66M12 6.6l-2.38-1.66M16.68 9.3l2.63 1.23M16.68 9.3l.25-2.89' +
+  'M16.68 14.7l.25 2.89M16.68 14.7l2.63-1.23M12 17.4l-2.38 1.66M12 17.4l2.38 1.66' +
+  'M7.32 14.7l-2.63-1.23M7.32 14.7l-.25 2.89M7.32 9.3l-.25-2.89M7.32 9.3l-2.63 1.23"/></svg>';
+
+// 沒設定溫度的品項（以及分類把冰熱顯示關掉時）不會有圖示 ——
+// 不像以前的圓點需要留空白佔位，圖示是跟在品名後面的，沒有就是沒有。
+function tempIcons(temp) {
+  if (!temp) return '';
+  var out = '';
+  if (temp === 'hot'  || temp === 'both') out += TEMP_ICON_HOT;
+  if (temp === 'iced' || temp === 'both') out += TEMP_ICON_COLD;
+  return out ? `<span class="temp-icons">${out}</span>` : '';
 }
 
 function renderSection(category) {
   const container = document.getElementById('menu-content');
   const items = menuData[category] || [];
   const t = sectionTitles[category] || { en: category, jp: null };
-  const hasTempItems = items.some(item => item.temp !== undefined);
   let html = `<div class="menu-section active">`;
 
   if (t.en || t.jp) {
@@ -252,10 +274,11 @@ function renderSection(category) {
       ? `<img src="${item.image}" alt="${item.name || ''}" loading="lazy">`
       : '';
     const imgBlock   = imgHtml ? `<div class="menu-item-img-wrap">${imgHtml}</div>` : '';
-    const dotsHtml   = hasTempItems ? tempDots(item.temp) : '';
-    const rightBlock = (dotsHtml || imgBlock) ? `<div class="menu-item-right">${dotsHtml}${imgBlock}</div>` : '';
+    const rightBlock = imgBlock ? `<div class="menu-item-right">${imgBlock}</div>` : '';
     const tagHtml     = item.tag ? `<span class="item-tag">${item.tag}</span>` : '';
     const soldOutHtml = item.soldOut ? `<span class="item-tag item-tag-soldout">售完</span>` : '';
+    // 標籤一律自己一行，排在品名底下 —— 品名長短不一時才不會忽上忽下
+    const tagsHtml   = (tagHtml || soldOutHtml) ? `<div class="menu-item-tags">${tagHtml}${soldOutHtml}</div>` : '';
     const nameHtml   = item.name   ? `<span class="menu-item-name">${item.name}</span>` : '';
     const nameJpHtml = item.nameJp ? `<div class="menu-item-name-jp">${item.nameJp.replace(/\n/g, '<br>')}</div>` : '';
     const descHtml   = item.desc   ? `<p class="menu-item-desc">${item.desc.replace(/\n/g, '<br>')}</p>` : '';
@@ -265,7 +288,8 @@ function renderSection(category) {
     html += `
       <div class="menu-item${item.soldOut ? ' menu-item-soldout' : ''}" style="animation-delay:${i * 0.07}s">
         <div class="menu-item-body">
-          <div class="menu-item-top">${nameHtml}${tagHtml}${soldOutHtml}</div>
+          <div class="menu-item-top">${nameHtml}${tempIcons(item.temp)}</div>
+          ${tagsHtml}
           ${nameJpHtml}
           ${descHtml}
           ${priceHtml}
@@ -302,6 +326,32 @@ function setOrHide(id, val, useInnerHTML = false) {
   } else {
     el.style.display = 'none';
   }
+}
+
+// 菜單入口的每個字各自套一個小圓框，所以要把標題拆成一個字一個 span。
+// 用 Array.from 而不是 split('')：emoji 與某些符號是兩個 code unit，
+// split('') 會把它們切成兩半變成亂碼。
+// 用 createElement + textContent 而不是拼 HTML 字串 —— 這段文字是後台輸入的，
+// 這樣寫就沒有跳脫字元的問題。
+function setCtaButton(label) {
+  const el = document.getElementById('cta-btn');
+  if (!el) return;
+
+  const text = String(label == null ? '' : label).trim();
+  if (!text) { el.style.display = 'none'; return; }
+
+  el.style.display = '';
+  el.textContent = '';
+  Array.from(text).forEach(ch => {
+    const span = document.createElement('span');
+    if (ch.trim() === '') {
+      span.className = 'btn-menu-gap';      // 空白不套圈，只留間隔
+    } else {
+      span.className = 'btn-menu-char';
+      span.textContent = ch;
+    }
+    el.appendChild(span);
+  });
 }
 
 function hideEl(id) {
@@ -870,7 +920,7 @@ function initLanding() {
   }
 
   /* ── CTA ── */
-  setOrHide('cta-btn',  ld.ctaButton);
+  setCtaButton(ld.ctaButton);
   setOrHide('cta-hint', ld.ctaHint);
 
   /* ── Footer ── */
@@ -886,7 +936,7 @@ function initLanding() {
   const logoWrap = document.getElementById('menu-logo-wrap');
   if (logoWrap && (ld.cafeName || ld.cafeSub)) {
     logoWrap.innerHTML =
-      (ld.cafeName ? `<div class="cafe-logo-text" style="font-size:12px">${ld.cafeName}</div>` : '') +
+      (ld.cafeName ? `<div class="cafe-logo-text" style="font-size:21px;line-height:1.2">${ld.cafeName}</div>` : '') +
       (ld.cafeSub  ? `<div class="cafe-logo-jp"   style="font-size:10px">${ld.cafeSub}</div>`  : '');
   }
 

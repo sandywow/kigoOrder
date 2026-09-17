@@ -40,10 +40,11 @@
  *   全部由 GAS 當場讀取試算表決定（Menu.gs 的 menuReadSheet 會跳過空白列
  *   且不回傳列號，前端根本無法知道某筆資料在第幾列）。
  *
- * 之後要加 Token 只要改 menuWriteAuthorize() 一支函式，其他都不用動。
+ * saveMenu 需要 token：值存在這個專案的指令碼屬性 MENU_WRITE_TOKEN，
+ * 不在這份檔案裡（見下面的「Token 驗證」）。訂單 API 不受影響。
  */
 
-var MENU_WRITE_VERSION = 1;
+var MENU_WRITE_VERSION = 2;   // v2: saveMenu 需要 token（值存在指令碼屬性）
 
 // ⚠ 寫入的總開關。false = 只算計畫不寫入（menuWriteApplyTable 連第一格都不會碰）。
 //   要真的開始寫入時只改這一行；寫入邏輯本身已經完成，不需要再補程式碼。
@@ -213,7 +214,7 @@ function handleSaveMenu(payload) {
 
 // 回傳純物件，方便編輯器裡的 menuWriteSelfTest() 直接檢查
 function saveMenuResult(payload) {
-  // 之後要加 Token 就只改這一支，saveMenu 的其他部分完全不用動
+  // Token 驗證：在 LockService、讀取工作表、任何寫入之前就決定放不放行
   var denied = menuWriteAuthorize(payload);
   if (denied) return denied;
 
@@ -229,9 +230,123 @@ function saveMenuResult(payload) {
   }
 }
 
-// Token 之後掛在這裡。回傳 null = 通過；回傳物件 = 直接當成回應送出。
+/* ═════════════════════════════
+   Token 驗證
+
+   saveMenu 每一次請求都要帶 token。比對在 saveMenuResult() 的第一行做完，
+   位置在 LockService、在讀取工作表、在算計畫、在任何寫入之前 ——
+   沒過就直接回傳，整條路徑連一次 getRange 都不會發生。
+
+   ⚠ 真正的 token「不在這份檔案裡」。這份檔案會進公開 repo，所以值存在
+     這個 Apps Script 專案的指令碼屬性（Script Properties）：
+       專案設定(Project Settings) → 指令碼屬性 → 新增
+         屬性：MENU_WRITE_TOKEN
+         值  ：一串夠長的隨機字串
+     不想自己想一串就在編輯器執行 menuWriteGenerateToken()，它會產生、存好，
+     並在執行紀錄印出來一次（之後就只看得到指紋）。
+
+   ⚠ 這個 token 只管 saveMenu。訂單 API（doPost 的其他 action 與建立訂單的
+     fallback）完全不經過這裡，點餐前台不受任何影響。
+   ═════════════════════════════ */
+
+var MENU_WRITE_TOKEN_PROPERTY = 'MENU_WRITE_TOKEN';
+
+// 回傳 null = 通過；回傳物件 = 直接當成回應送出（呼叫端不會再往下走）。
 function menuWriteAuthorize(payload) {
+  var expected = menuWriteStoredToken();
+
+  // 還沒設定就一律拒絕（fail closed）。設定漏掉時寧可存不了，
+  // 也不要退回成「誰都可以寫」。
+  if (!expected) {
+    return menuWriteFailure('token not configured', [
+      '這個 Apps Script 專案還沒有設定 ' + MENU_WRITE_TOKEN_PROPERTY +
+      '（專案設定 → 指令碼屬性），saveMenu 一律拒絕'
+    ]);
+  }
+
+  if (!menuWriteSecretEquals(payload && payload.token, expected)) {
+    // 錯誤訊息不要透露任何線索（長度、對到第幾個字都不講）
+    return menuWriteFailure('unauthorized', ['saveMenu 的 token 不正確或沒有帶']);
+  }
+
   return null;
+}
+
+function menuWriteStoredToken() {
+  try {
+    var value = PropertiesService.getScriptProperties().getProperty(MENU_WRITE_TOKEN_PROPERTY);
+    return String(value == null ? '' : value).trim();
+  } catch (err) {
+    // 讀不到屬性就當作沒設定 —— 一樣是拒絕，不會變成放行
+    return '';
+  }
+}
+
+// 比對 SHA-256 之後的位元組，而且一定跑完全部 32 個位元組。
+// 不用 a === b 是因為字串比對會在第一個不同的字元就回來，
+// 回應時間會洩漏「猜對了前幾個字」；改比雜湊也讓長度不會外流。
+function menuWriteSecretEquals(given, expected) {
+  var a = menuWriteDigest(String(given == null ? '' : given));
+  var b = menuWriteDigest(String(expected == null ? '' : expected));
+
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < a.length && i < b.length; i++) {
+    diff |= (a[i] ^ b[i]);
+  }
+  return diff === 0;
+}
+
+function menuWriteDigest(value) {
+  return Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8);
+}
+
+// 指紋：可以拿來對照「後台輸入的那一串跟這裡存的是不是同一個」，
+// 但看不出原本的值。
+function menuWriteTokenFingerprint(value) {
+  var bytes = menuWriteDigest(String(value == null ? '' : value));
+  var hex = '';
+  for (var i = 0; i < 4; i++) {
+    hex += ('0' + (bytes[i] & 0xff).toString(16)).slice(-2);
+  }
+  return hex;
+}
+
+/* ── 編輯器用的兩支小工具（不經過 doPost，不用部署也能跑）── */
+
+// 產生一組 token 存進指令碼屬性，並印出來一次。
+// 已經有設定就不覆蓋 —— 蓋掉會讓所有後台立刻存不了東西。
+function menuWriteGenerateToken() {
+  var props = PropertiesService.getScriptProperties();
+  var current = menuWriteStoredToken();
+  if (current) {
+    var msg = MENU_WRITE_TOKEN_PROPERTY + ' 已經設定過了（指紋 ' +
+      menuWriteTokenFingerprint(current) + '）。\n' +
+      '要換一組請先到「專案設定 → 指令碼屬性」把它刪掉再執行這一支。';
+    Logger.log(msg);
+    return msg;
+  }
+
+  var token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  props.setProperty(MENU_WRITE_TOKEN_PROPERTY, token);
+
+  var out = '已產生並儲存 ' + MENU_WRITE_TOKEN_PROPERTY + '：\n\n' + token + '\n\n' +
+    '（指紋 ' + menuWriteTokenFingerprint(token) + '）\n' +
+    '把上面那一串貼到後台第一次儲存時跳出來的視窗。\n' +
+    '⚠ 這是唯一一次看得到完整內容，之後只查得到指紋。';
+  Logger.log(out);
+  return out;
+}
+
+// 只回報有沒有設定與指紋，不會印出 token 本身
+function menuWriteTokenStatus() {
+  var token = menuWriteStoredToken();
+  var msg = token
+    ? MENU_WRITE_TOKEN_PROPERTY + ' 已設定（長度 ' + token.length +
+      '，指紋 ' + menuWriteTokenFingerprint(token) + '）'
+    : MENU_WRITE_TOKEN_PROPERTY + ' 尚未設定 —— saveMenu 目前一律拒絕';
+  Logger.log(msg);
+  return msg;
 }
 
 function saveMenuLocked(payload) {
@@ -1354,7 +1469,8 @@ function menuWriteSelfTest() {
     say('───── ' + label + ' ─────');
     var r;
     try {
-      r = saveMenuResult({ action: 'saveMenu', site: 'orderWeb', tables: tables });
+      r = saveMenuResult({ action: 'saveMenu', site: 'orderWeb',
+        token: menuWriteStoredToken(), tables: tables });
     } catch (err) {
       r = { ok: false, error: 'THREW: ' + err, errors: [String(err)] };
     }

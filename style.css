@@ -89,23 +89,28 @@ body::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 24px 0;
+  padding: 34px 24px 0;
   animation: fadeUp 1s ease both;
   text-align: center;
-  gap: 6px;
+  gap: 9px;
 }
+/* 店名改成手寫體。手寫體是連筆的字，原本那組設定（全大寫 + 0.45em 字距）
+   會把字母一個個拆開，連筆就斷了 —— 所以這裡同時把大寫與寬字距拿掉。
+   手寫體的實際字身比同 px 的襯線字小很多，字級要放大才等重。 */
 .cafe-logo-text {
-  font-family: 'DM Serif Display', serif;
-  font-size: 20px;
-  letter-spacing: 0.45em;
+  font-family: 'Allura', 'Cormorant Garamond', cursive;
+  font-size: 46px;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
   color: var(--caramel);
-  text-transform: uppercase;
+  text-transform: none;
 }
 .cafe-logo-jp {
   font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
-  letter-spacing: 0.25em;
-  color: var(--ink-faint);
+  font-size: 17px;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;   /* 補回尾字多出來的那一格字距，整串才是真的置中 */
+  color: var(--ink-soft);
 }
 .landing-date {
   font-family: 'Cormorant Garamond', serif;
@@ -120,7 +125,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 18px 24px 0;
+  margin: 22px 24px 0;
   animation: fadeUp 1s 0.1s ease both;
 }
 .deco-rule::before, .deco-rule::after {
@@ -139,7 +144,7 @@ body::before {
 /* Hero area */
 .hero-wrapper {
   position: relative;
-  margin: 20px 16px 0;
+  margin: 14px 16px 0;
   border-radius: 4px;
   overflow: hidden;
   animation: fadeUp 1s 0.2s ease both;
@@ -254,7 +259,7 @@ body::before {
 
 /* Poetic tagline */
 .tagline-block {
-  padding: 32px 28px 0;
+  padding: 20px 28px 0;
   animation: fadeUp 1s 0.35s ease both;
   text-align: center;
 }
@@ -263,21 +268,24 @@ body::before {
   font-style: italic;
   font-size: 17px;
   color: var(--ink-soft);
-  line-height: 2.0;
+  line-height: 1.45;
   letter-spacing: 0.03em;
 }
 .tagline-block .jp {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin-top: 10px;
-  letter-spacing: 0.25em;
+  /* 店名已經是手寫體了，這一行再用手寫體整頁會太花。
+     改回正的字，但用高對比的展示襯線 + 寬字距做出設計感。 */
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  font-size: 14px;
+  color: var(--caramel);
+  line-height: 1.6;
+  margin-top: 5px;
+  letter-spacing: 0.12em;
   display: block;
 }
 
 /* Seasonal recommendation card */
 .seasonal-card {
-  margin: 28px 20px 0;
+  margin: 18px 20px 0;
   padding: 28px 24px;
   background: var(--white);
   border: 1px solid var(--beige);
@@ -349,53 +357,99 @@ body::before {
   vertical-align: middle;
 }
 
-/* CTA button */
+/* ── 菜單入口 ──
+
+   原本是整塊焦糖色的實心按鈕，在這個奶油紙質的版面上像貼了一張色塊。
+   改成「菜單裡的一個條目」：上下各一條細線把標題框起來，字距拉開，
+   底色留白 —— 視覺上比較像翻開菜單的那一頁，而不是一顆網頁按鈕。
+
+       M E N U          ← 極小的英文標，跟海報區銜接
+   ──────────────
+       今 日 菜 單       ← 主標，細線框起來
+   ──────────────
+     瀏覽全品項 ⤴︎       ← 補充說明，最輕
+
+   弱化了底色就得靠其他東西撐住可點擊感：夠大的可點面積（整塊 56px 以上）、
+   按下去的底色變化、以及框線在 hover / active 時轉成焦糖色。 */
 .cta-wrapper {
-  padding: 36px 20px 48px;
+  padding: 20px 20px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
   animation: fadeUp 1s 0.6s ease both;
 }
-.btn-menu {
-  display: block;
-  width: 100%;
-  max-width: 280px;
-  padding: 20px 36px;
-  background: var(--caramel);
-  color: var(--cream);
+
+/* 極小的英文標。純裝飾，所以放在 CSS 的 ::before，不佔語意 */
+.cta-wrapper::before {
+  content: 'MENU';
   font-family: 'DM Serif Display', serif;
-  font-size: 15px;
-  letter-spacing: 0.35em;
-  text-align: center;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.55em;
+  text-indent: 0.55em;
+  color: var(--caramel-lt);
+}
+
+/* 每個字各自一個小圓框（像四枚壓印的小章）。整條色塊換成四個圓，
+   底色還是頁面自己的紙色，只是被切成四塊 —— 比一整條更輕、也更有手作感。
+   字是 JS 拆開包成 .btn-menu-char 的（見 menu.js 的 setCtaButton）。 */
+.btn-menu {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px;
+  background: none;
   border: none;
+  color: var(--caramel);
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  font-size: 20px;
+  line-height: 1;
   cursor: pointer;
-  transition: background 0.4s ease, transform 0.3s ease;
-  position: relative;
 }
-.btn-menu::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border: 1px solid rgba(247,243,236,0.25);
-  pointer-events: none;
+/* 原本實心按鈕的內框，在這個版本沒有意義了 */
+.btn-menu::after { content: none; }
+
+.btn-menu-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1em;
+  height: 2.1em;
+  border-radius: 50%;
+  /* 印泥色：--caramel-lt 降飽和（40% → 27%），亮度不動。
+     純度一降就從「棕色」變成「帶灰的陶土色」，配這張紙比較不跳 */
+  background: #A98669;
+  border: 1px solid #A98669;
+  color: var(--cream);
+  /* 圓框裡的字要正中間，所以這裡把外面的字距歸零 */
+  letter-spacing: 0;
+  text-indent: 0;
+  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
-.btn-menu:hover {
-  background: var(--ink-soft);
-  transform: translateY(-1px);
+/* 標題中間若有空格，不套圈、只留一點間隔 */
+.btn-menu-gap { width: 0.35em; }
+
+.btn-menu:hover .btn-menu-char,
+.btn-menu:focus-visible .btn-menu-char,
+.btn-menu:active .btn-menu-char {
+  background: #7E6049;   /* 同樣降飽和的深一階 */
+  border-color: #7E6049;
+  color: var(--cream);
 }
+
 .btn-hint {
   font-family: 'Noto Serif TC', serif;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-faint);
-  letter-spacing: 0.25em;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
 }
 
 /* Decorative footer elements */
 .landing-footer {
-  padding: 0 24px 20px;
+  padding: 0 24px 16px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -410,7 +464,7 @@ body::before {
 
 /* ── Seasonal Banner ── */
 .banner-section {
-  margin: 28px 20px 0;
+  margin: 32px 20px 14px;
   animation: fadeUp 1s 0.55s ease both;
 }
 .banner-label {
@@ -617,10 +671,10 @@ body::before {
 .menu-section.active { display: block; }
 
 .section-intro {
-  padding: 32px 4px 24px;
+  padding: 16px 4px 12px;
   text-align: center;
   border-bottom: 1px solid var(--parchment);
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 .section-intro h3 {
   font-family: 'DM Serif Display', serif;
@@ -642,7 +696,7 @@ body::before {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 26px 0;
+  padding: 13px 0;
   border-bottom: 1px solid var(--parchment);
 }
 .menu-item:last-child { border-bottom: none; }
@@ -654,45 +708,55 @@ body::before {
 .menu-item-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  /* 標籤固定跟在品名右邊：不換行，名稱太長時是名稱自己縮，標籤不被擠下去 */
+  flex-wrap: nowrap;
   gap: 8px;
   margin-bottom: 4px;
 }
 .menu-item-name {
   font-family: 'Noto Serif TC', serif;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 400;
   color: var(--ink);
   letter-spacing: 0.06em;
   line-height: 1.35;
+  min-width: 0;   /* 跟標籤同一行時，長名稱要縮得下來才不會把標籤擠出去 */
 }
 
-/* Temperature pill */
-/* Temperature dots */
 .menu-item-right {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   flex-shrink: 0;
 }
-.temp-dots {
-  display: flex;
-  flex-direction: row;
+/* 冰熱標示：熱＝紅色的煙、冰＝藍色的雪花，跟在品名後面（原本是右側的紅藍圓點） */
+.temp-icons {
+  display: inline-flex;
   align-items: center;
-  gap: 1em;
+  gap: 3px;
   flex-shrink: 0;
-  padding-top: 6px;
 }
-.temp-dot {
+.temp-icon {
   display: block;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
-.temp-dot-hot   { background: #d94f4f; }
-.temp-dot-cold  { background: #4a90d9; }
-.temp-dot-blank { background: transparent; }
+/* 顏色配合整體的奶油／焦糖色調：磚紅與霧藍，比原本的正紅正藍收斂 */
+.temp-icon-hot  { color: #C0563F; }
+.temp-icon-cold { color: #5C87A6; }
+/* 煙是「填滿」的形狀、雪花是線條，同樣 16px 時煙會顯得又大又重。
+   縮成 13px 之後兩者的實際高度（煙 13、雪花約 12.4）就一致了，
+   筆畫也跟著等比變細。 */
+.temp-icon-hot { width: 13px; height: 13px; }
+
+/* 標籤自己一行，排在品名底下 */
+.menu-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
 .menu-item-soldout { opacity: 0.45; }
 .menu-item-soldout .menu-item-price { text-decoration: line-through; }
 .item-tag-soldout {
@@ -706,16 +770,17 @@ body::before {
   background: var(--lemon);
   color: var(--caramel);
   font-family: 'Noto Serif TC', serif;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  padding: 4px 11px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  padding: 4px 10px;
   border: 1px solid rgba(139,94,60,0.15);
   border-radius: 999px;
   flex-shrink: 0;
+  white-space: nowrap;   /* 標籤自己絕不折行 */
 }
 .menu-item-name-jp {
   font-family: 'Noto Serif TC', serif;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-faint);
   letter-spacing: 0.2em;
   margin-top: 3px;
@@ -723,14 +788,14 @@ body::before {
 .menu-item-desc {
   font-family: 'Noto Serif TC', serif;
   font-style: normal;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink-soft);
   line-height: 1.75;
   margin-top: 7px;
 }
 .menu-item-price {
   font-family: 'DM Serif Display', serif;
-  font-size: 19px;
+  font-size: 17px;
   color: var(--caramel);
   margin-top: 10px;
   letter-spacing: 0.03em;

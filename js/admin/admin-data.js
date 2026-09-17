@@ -465,6 +465,62 @@ function blankRow(headers) {
 }
 
 
+
+/* ── 菜單寫入 Token ──
+
+   GAS 那邊的 saveMenu 要求每一次請求都帶 token，對不上就在讀寫任何儲存格
+   之前直接拒絕（menuWriteAuthorize）。這裡負責「這台裝置用哪一個 token」。
+
+   ⚠ Token 絕對不寫進這份檔案、也不進 state / landingData ——
+     這個 repo 是公開的，而 landingData 會被「複製 config.js」原樣匯出。
+     它只存在這台電腦的 localStorage（自己一把 key），第一次儲存時用
+     prompt 問一次，之後就不會再問。
+
+   換裝置、換瀏覽器就再輸入一次。要手動設定或清掉，在後台的 Console：
+     setMenuWriteToken('貼上 token')
+     clearMenuWriteToken()                                             */
+
+var MENU_WRITE_TOKEN_KEY = 'kigoMenuWriteToken';
+
+function menuWriteTokenValue() {
+  try {
+    return String(localStorage.getItem(MENU_WRITE_TOKEN_KEY) || '').trim();
+  } catch (e) {
+    // 無痕模式之類的環境會直接丟例外
+    return '';
+  }
+}
+
+function setMenuWriteToken(token) {
+  var value = String(token == null ? '' : token).trim();
+  if (!value) return clearMenuWriteToken();
+  try {
+    localStorage.setItem(MENU_WRITE_TOKEN_KEY, value);
+    showToast('菜單寫入 Token 已存在這台裝置');
+  } catch (e) {
+    console.error('[admin] 無法儲存 Token', e);
+    showToast('這個瀏覽器不讓我儲存 Token');
+  }
+  return value;
+}
+
+function clearMenuWriteToken() {
+  try {
+    localStorage.removeItem(MENU_WRITE_TOKEN_KEY);
+  } catch (e) { /* 沒存成功過就不用清 */ }
+  return '';
+}
+
+// 只在還沒有 token 的時候問一次。按取消就回空字串，這一輪不送出。
+function askMenuWriteToken() {
+  if (typeof window === 'undefined' || typeof window.prompt !== 'function') return '';
+  var entered = window.prompt(
+    '請輸入菜單寫入 Token（Apps Script 專案屬性 MENU_WRITE_TOKEN 的值）。\n' +
+    '只會問這一次，之後存在這台裝置的瀏覽器裡。');
+  if (entered === null) return '';
+  return setMenuWriteToken(entered);
+}
+
 /* ── 進入點 ── */
 
 function pushMenuToSheets() {
@@ -479,6 +535,14 @@ function pushMenuToSheets() {
     var endpoint = adminMenuEndpoint();
     if (!endpoint) {
       showToast('找不到菜單 API 網址，這次沒有同步到 Sheets');
+      return;
+    }
+
+    // Token 在 endpoint 之後、組 payload 之前就要拿到 ——
+    // 拿不到就整段不做，連新商品的 id 都不會發（下次再一起處理）。
+    var token = menuWriteTokenValue() || askMenuWriteToken();
+    if (!token) {
+      showToast('沒有菜單寫入 Token，這次沒有同步到 Sheets');
       return;
     }
 
@@ -500,7 +564,7 @@ function pushMenuToSheets() {
       console.log('[admin] 新商品取得 id：' + built.newIds.join('、'));
     }
 
-    apiSaveMenu(endpoint, built.tables);
+    apiSaveMenu(endpoint, token, built.tables);
   } catch (err) {
     // 最後一道：絕對不讓例外往上丟回 saveConfig()
     console.error('[admin] pushMenuToSheets 發生例外', err);
@@ -510,7 +574,7 @@ function pushMenuToSheets() {
 
 // 跟 apiPostOrder 一樣用 text/plain：Apps Script 沒有處理 CORS 預檢(OPTIONS)，
 // 用 application/json 會觸發預檢而直接失敗。
-function apiSaveMenu(endpoint, tables) {
+function apiSaveMenu(endpoint, token, tables) {
   if (typeof fetch !== 'function') {
     showToast('這個瀏覽器不支援同步到 Sheets');
     return;
@@ -520,7 +584,7 @@ function apiSaveMenu(endpoint, tables) {
   // 萬一 /exec 還是舊版、沒有 saveMenu 這條路由，請求會落到「建立訂單」的
   // fallback，而它讀的是 payload.items —— 包一層之後那裡永遠是 undefined，
   // 只會拿到「order has no items」，菜單資料不會被寫進 Orders。
-  var body = { action: 'saveMenu', site: ADMIN_SITE, tables: tables };
+  var body = { action: 'saveMenu', site: ADMIN_SITE, token: token, tables: tables };
 
   fetch(endpoint, {
     method: 'POST',
@@ -548,6 +612,17 @@ function reportSaveMenuResult(data) {
     // GAS 還沒重新部署時沒有 saveMenu 這條路由，請求會落到建立訂單的 fallback
     if (errors.join(' ').indexOf('order has no items') >= 0) {
       showToast('菜單 API 尚未部署新版（GAS 還是舊版），這次沒有寫入');
+      return;
+    }
+    // Token 沒帶或不對。存在這台裝置的那一份已經沒用了，清掉讓下次儲存重問，
+    // 免得一直用同一個錯的值重試。
+    if (data.error === 'unauthorized') {
+      clearMenuWriteToken();
+      showToast('菜單寫入 Token 不正確，已清除；下次儲存會再問一次');
+      return;
+    }
+    if (data.error === 'token not configured') {
+      showToast('Apps Script 還沒設定菜單寫入 Token（詳見 Console）');
       return;
     }
     showToast('菜單同步失敗：' + (errors[0] || '未知錯誤'));
