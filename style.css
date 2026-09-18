@@ -1200,11 +1200,16 @@ body::before {
    外觀是一片實心圓。
 
    grid 的 auto-fit + 1fr 讓每一格寬度相同、平均攤在整列上；
-   圓本身是固定尺寸、置中在自己那一格裡，所以桌號數量不管幾個，
-   間距都會是平均的。 */
+   圓置中在自己那一格裡，所以桌號數量不管幾個，間距都會是平均的。
+
+   每一格的最小寬度要抓得夠小，「1 2 3 4 吧檯」這種 5 個選項才排得進同一列：
+   手機上表單能用的寬度是「螢幕 − option-modal 的 16×2 − option-body 的 18×2」，
+   最窄的 320px 螢幕只剩 252px，5 格加 4 個間距要塞得下 → 每格最多 44px。
+   圓本身還是 50px（格子比它寬就維持 50px），格子被擠得比圓還窄時才跟著縮，
+   所以一般情況（5 個選項、375px 以上）看起來跟以前一樣。 */
 .seating-tables {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
   gap: 6px;
   justify-items: center;
 }
@@ -1227,15 +1232,16 @@ body::before {
   cursor: pointer;
 }
 
-/* 一片實心圓 */
+/* 一片實心圓。格子比 50px 窄時（桌號很多、或螢幕很窄）圓跟著縮，
+   不然圓會互相疊在一起。 */
 .seating-table::before {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 50px;
-  height: 50px;
-  margin: -25px 0 0 -25px;
+  transform: translate(-50%, -50%);
+  width: min(50px, 100%);
+  aspect-ratio: 1;
   border-radius: 50%;
   background: var(--parchment);
   pointer-events: none;
