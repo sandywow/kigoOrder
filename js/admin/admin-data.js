@@ -125,12 +125,12 @@ function bySheetSortOrder(a, b) {
   return sheetNumber(a.sortOrder) - sheetNumber(b.sortOrder);
 }
 
-/* ── 海報圖片的路徑格式 ──
+/* ── 圖片的路徑格式（海報輪播與菜單品項共用） ──
 
-   後台的「輪播圖片網址」欄從以前就是填相對路徑（config.js 的預設值與
-   admin.html 的 placeholder 都是 src/BANNER FISH-03.jpg），不是完整網址。
+   後台的圖片欄填的是相對路徑（config.js 的預設值與 admin.html / admin-menu.js
+   的 placeholder 都是 src/BANNER FISH-03.jpg、src/photo.jpg），不是完整網址。
 
-   但 Banners 工作表的儲存格存的是 Menu.gs 的 menuResolveImage 看得懂的值：
+   但 Banners / Items 工作表的儲存格存的是 Menu.gs 的 menuResolveImage 看得懂的值：
      · 完整網址（http / data:）→ 原樣輸出
      · 其他 → encodeURI(MENU_IMAGE_BASE + 值)
 
@@ -143,33 +143,34 @@ function bySheetSortOrder(a, b) {
      儲存格 'https://…/kigoMenu/src/BANNER%20FISH-03.jpg' ↔ 後台 'src/BANNER FISH-03.jpg'
      儲存格 'https://其他網站/x.jpg'（不在 imageBase 底下）↔ 後台原樣顯示、原樣存回
 
-   前台完全不受影響：它拿到的是 GAS 用 imageBase 組好的完整網址。 */
+   前台完全不受影響：它拿到的是 GAS 用 imageBase 組好的完整網址；匯出的
+   config.js 則拿到 src/檔名，本機直接開也看得到圖。 */
 
-var BANNER_PATH_PREFIX = 'src/';
+var IMAGE_PATH_PREFIX = 'src/';
 
 function isAbsoluteImagePath(value) {
   return /^(https?:)?\/\//i.test(value) || value.indexOf('data:') === 0;
 }
 
 // 儲存格的值 → 後台欄位看到的相對路徑
-function bannerDisplayPath(value) {
+function imageDisplayPath(value) {
   var raw = String(value == null ? '' : value).trim().replace(/\\/g, '/');
   if (!raw) return '';
 
   var base = (state.raw && state.raw.imageBase) || '';
   if (base && raw.indexOf(base) === 0) {
     // imageBase 底下的圖 → 還原成 src/檔名（順便把 %20 解回空白）
-    return BANNER_PATH_PREFIX + decodeImagePath(raw.substring(base.length));
+    return IMAGE_PATH_PREFIX + decodeImagePath(raw.substring(base.length));
   }
   // 別的網站的圖沒辦法縮短，原樣顯示
   if (isAbsoluteImagePath(raw)) return raw;
 
   raw = raw.replace(/^\/+/, '');
-  return (/^src\//i.test(raw)) ? raw : BANNER_PATH_PREFIX + raw;
+  return (/^src\//i.test(raw)) ? raw : IMAGE_PATH_PREFIX + raw;
 }
 
 // 後台欄位的值 → 要寫進儲存格的值
-function bannerSheetPath(display) {
+function imageSheetPath(display) {
   var raw = String(display == null ? '' : display).trim().replace(/\\/g, '/');
   if (!raw) return '';
 
@@ -178,13 +179,13 @@ function bannerSheetPath(display) {
 
   raw = raw.replace(/^\/+/, '');
   // imageBase 已經以 src/ 結尾，儲存格只放檔名
-  if (/^src\//i.test(raw)) raw = raw.substring(BANNER_PATH_PREFIX.length);
+  if (/^src\//i.test(raw)) raw = raw.substring(IMAGE_PATH_PREFIX.length);
   return raw;
 }
 
 // 兩個值講的是不是同一張圖：都換算成儲存格的寫法再比
-function bannerImageKey(value) {
-  return bannerSheetPath(bannerDisplayPath(value));
+function imageCellKey(value) {
+  return imageSheetPath(imageDisplayPath(value));
 }
 
 // 舊資料是 encodeURI 過的（空白變 %20）。decodeURI 遇到壞字串會丟例外，
@@ -330,9 +331,8 @@ function displayItem(itemRow, linkRow) {
     // 後台的價格欄是純文字，對應 Items 的 price(數字) + priceText 兩欄
     price:   priceText || (priceNumber === null ? null : 'NT$' + priceNumber),
     tag:     sheetText(itemRow.tag),
-    // 顯示儲存格的原始值（可能只是檔名）。補上 imageBase 前綴是 GAS 給前台做的事，
-    // 後台要編輯的是儲存格內容本身。
-    image:   sheetText(itemRow.image),
+    // 跟海報一樣換算成後台慣用的「src/檔名」（見 imageDisplayPath）
+    image:   sheetText(imageDisplayPath(itemRow.image)),
     emoji:   null,
     temp:    sheetText(itemRow.temp),
     soldOut: sheetBool(itemRow.soldOut),
@@ -371,7 +371,7 @@ function landingFromSheets() {
     return sheetBool(row.active) && sheetSiteMatch(row.site) && sheetText(row.image);
   }).slice().sort(bySheetSortOrder).map(function (row) {
     // 後台欄位一律顯示「src/檔名」，不是儲存格裡那串完整網址
-    return bannerDisplayPath(row.image);
+    return imageDisplayPath(row.image);
   });
 
   return out;
@@ -788,7 +788,8 @@ function patchItemRow(row, item) {
   next.desc      = ve(item.desc);
   next.price     = price.number;
   next.priceText = price.text;
-  next.image     = ve(item.image);
+  // 後台欄位是「src/檔名」，儲存格只放檔名（imageBase 已經以 src/ 結尾）
+  next.image     = ve(imageSheetPath(item.image));
   next.tag       = ve(item.tag);
   next.temp      = ve(item.temp);
   next.soldOut   = !!item.soldOut;
@@ -1036,7 +1037,7 @@ function settingCellValue(type, value) {
 
      bannerImages = Banners 裡 active ✕ 這一站 ✕ image 不空白的列，
                     依 sortOrder 排序後取 image 儲存格的值，
-                    再換算成後台慣用的「src/檔名」（見 bannerDisplayPath）
+                    再換算成後台慣用的「src/檔名」（見 imageDisplayPath）
 
    所以寫回去時也用同一個條件把「清單代表的那幾列」挑出來，其餘的列
    （下架的、menuWeb 專屬的、image 空白的）在後台根本看不到，一律原封
@@ -1092,7 +1093,7 @@ function buildBannersTable(raw, out) {
   }
   // 後台欄位裡是「src/檔名」，儲存格要的是「檔名」（imageBase 已經含 src/）。
   // 這裡先全部換算成儲存格的寫法，後面的比對、寫入就都是同一種格式。
-  list = list.map(function (v) { return bannerSheetPath(v); })
+  list = list.map(function (v) { return imageSheetPath(v); })
     .filter(function (v) { return v !== ''; });
 
   /* ── ① image 完全相同 ── */
@@ -1102,7 +1103,7 @@ function buildBannersTable(raw, out) {
     for (var j = 0; j < visible.length; j++) {
       if (taken[j]) continue;
       // 比對前兩邊都換算成儲存格的寫法，完整網址與相對路徑才不會被當成不同張圖
-      if (bannerImageKey(visible[j].image) === image) {
+      if (imageCellKey(visible[j].image) === image) {
         matched[i] = visible[j];
         taken[j] = true;
         return;
@@ -1116,15 +1117,15 @@ function buildBannersTable(raw, out) {
   list.forEach(function (image, i) {
     if (matched[i] || next >= leftover.length) return;
     var row = leftover[next++];
-    out.warnings.push('海報 ' + sheetText(row.id) + ' 的圖片從「' + bannerDisplayPath(row.image) +
-      '」改成「' + bannerDisplayPath(image) + '」（沿用原本的 id / alt / active / site）');
+    out.warnings.push('海報 ' + sheetText(row.id) + ' 的圖片從「' + imageDisplayPath(row.image) +
+      '」改成「' + imageDisplayPath(image) + '」（沿用原本的 id / alt / active / site）');
     matched[i] = row;   // 實際的 image 在最後統一寫入
   });
 
   /* ── ③ 沒配到的列 = 真的從清單上被移除了 ── */
   for (var i = next; i < leftover.length; i++) {
     out.warnings.push('海報 ' + sheetText(leftover[i].id) + '（' +
-      bannerDisplayPath(leftover[i].image) +
+      imageDisplayPath(leftover[i].image) +
       '）已經不在首頁海報清單裡，這次儲存會把它從試算表刪除');
   }
 

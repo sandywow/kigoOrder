@@ -103,8 +103,8 @@ function buildItemCard(catKey, item, idx, withTemp, total) {
         </div>
       </div>
       <div class="field">
-        <label>圖片網址 <span class="hint">（空白 = 不顯示）</span></label>
-        <input type="text" value="${esc(item.image)}" placeholder="src/photo.jpg 或圖片網址"
+        <label>圖片路徑 <span class="hint">（例：src/photo.jpg；也可貼完整網址，空白 = 不顯示）</span></label>
+        <input type="text" value="${esc(item.image)}" placeholder="src/photo.jpg"
           oninput="updateItem('${catKey}',${idx},'image',this.value)">
       </div>
       <div class="field"><label>溫度選項</label><select onchange="updateItem('${catKey}',${idx},'temp',this.value)">${sel()}</select></div>
