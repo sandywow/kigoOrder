@@ -97,7 +97,7 @@ function buildItemCard(catKey, item, idx, withTemp, total) {
             oninput="updateItem('${catKey}',${idx},'price',this.value)">
         </div>
         <div class="field">
-          <label>標籤 <span class="hint">（可空白）</span></label>
+          <label>標籤 <span class="hint">（可空白；多個用、隔開）</span></label>
           <input type="text" value="${esc(item.tag)}" placeholder="限定"
             oninput="updateItem('${catKey}',${idx},'tag',this.value)">
         </div>

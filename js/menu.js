@@ -112,10 +112,13 @@ function paintSeatingTables() {
 
   // 桌號字串要先 JSON.stringify 成 JS 字面值，再 escAttr 把引號轉成實體 ——
   // 直接放進 onclick="..." 的話，值裡的雙引號會把屬性截斷。
+  // 數字包一層 span：菱形是兩個絕對定位的 ::before / ::after，
+  // 沒有這層包裝的話文字會被壓在菱形底下。
   wrap.innerHTML = options.map(t => `
     <button type="button" class="seating-table${t === seatingDraftTable ? ' selected' : ''}"
             role="radio" aria-checked="${t === seatingDraftTable}"
-            onclick="setSeatingTable(${escAttr(JSON.stringify(t))}, true)">${escHtml(t)}</button>`).join('');
+            onclick="setSeatingTable(${escAttr(JSON.stringify(t))}, true)"><span
+            class="seating-table-num">${escHtml(t)}</span></button>`).join('');
 }
 
 function setSeatingTable(value, repaint) {
@@ -275,7 +278,15 @@ function renderSection(category) {
       : '';
     const imgBlock   = imgHtml ? `<div class="menu-item-img-wrap">${imgHtml}</div>` : '';
     const rightBlock = imgBlock ? `<div class="menu-item-right">${imgBlock}</div>` : '';
-    const tagHtml     = item.tag ? `<span class="item-tag">${item.tag}</span>` : '';
+    // 標籤可以填多個：用逗號或頓號隔開（半形 , 全形 ， 頓號 、都認），
+    // 前台會拆成一顆一顆的膠囊排在同一列。目前的標籤都沒有這些符號，
+    // 所以舊資料的顯示完全不受影響。
+    const tagHtml = String(item.tag == null ? '' : item.tag)
+      .split(/[,，、]/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => `<span class="item-tag">${s}</span>`)
+      .join('');
     const soldOutHtml = item.soldOut ? `<span class="item-tag item-tag-soldout">售完</span>` : '';
     // 標籤一律自己一行，排在品名底下 —— 品名長短不一時才不會忽上忽下
     const tagsHtml   = (tagHtml || soldOutHtml) ? `<div class="menu-item-tags">${tagHtml}${soldOutHtml}</div>` : '';
