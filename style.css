@@ -684,20 +684,26 @@ body::before {
   flex: 1;
   text-align: center;
 }
+/* 點到的那一頁下面的咖啡色線。
+   2px 是刻意的：1px 的時候會跟 .tab-bar 那條淺色底線疊在一起，
+   手機上看起來只是同一條細線，分不出自己點在哪一頁。 */
 .tab-btn::after {
   content: '';
   position: absolute;
   bottom: -1px; left: 50%; right: 50%;
-  height: 1px;
+  height: 2px;
   background: var(--caramel);
+  border-radius: 1px;
   transition: left 0.3s ease, right 0.3s ease;
 }
 .tab-btn.active {
   color: var(--caramel);
 }
+/* 線的長度 = 頁籤寬度扣掉左右各 8px。留一點是為了讓相鄰兩頁的線不會連成一條，
+   點到哪一頁還是看得出界線。 */
 .tab-btn.active::after {
-  left: 20px;
-  right: 20px;
+  left: 8px;
+  right: 8px;
 }
 
 /* Menu sections */

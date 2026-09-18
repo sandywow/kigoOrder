@@ -219,9 +219,27 @@ function switchTab(category, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderSection(category);
-  // Scroll content back to top of menu-content
+  scrollToSectionTop();
+}
+
+/* 切分類後捲回這一區的最上面。
+
+   頁籤列是 sticky 的（top:0，黏在 #menu-page 這個捲動容器的上緣），
+   但捲動的時候瀏覽器不知道它會黏在那裡 —— 直接把 #menu-content 對齊容器頂端，
+   分類標題就正好躲到頁籤列後面被吃掉了。所以目標位置要再往上扣掉頁籤列的高度。
+
+   高度是當場量的，不是寫死的數字：頁籤文字換行、字級調整都會改變它。 */
+function scrollToSectionTop() {
+  const page    = document.getElementById('menu-page');
   const content = document.getElementById('menu-content');
-  if (content) content.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (!page || !content) return;
+
+  const bar = document.getElementById('tab-bar');
+  const top = content.offsetTop - (bar ? Math.ceil(bar.getBoundingClientRect().height) : 0);
+
+  // 只在「已經捲過頭、標題會被蓋住」時才捲。還在上面（看得到菜單標題）
+  // 就不要自作主張把畫面往下拉。
+  if (page.scrollTop > top) page.scrollTo({ top: top, behavior: 'smooth' });
 }
 
 /* ═════════════════════
