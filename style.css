@@ -1161,6 +1161,10 @@ body::before {
   align-items: center;
   gap: 10px;
 }
+/* 電腦版的 input[type=number] 會在右側長出上下箭頭，那塊寬度也算在輸入區裡，
+   所以 text-align:center 置中的是「扣掉箭頭之後」的範圍，數字看起來偏左。
+   左右兩顆 −／＋ 已經能調數量了，箭頭直接關掉，數字才會真的在正中間。
+   （手機沒有這組箭頭，所以本來就看不出問題。） */
 .option-qty-row input {
   width: 62px;
   padding: 8px 10px;
@@ -1168,6 +1172,13 @@ body::before {
   border-radius: 8px;
   text-align: center;
   font-size: 15px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.option-qty-row input::-webkit-outer-spin-button,
+.option-qty-row input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .option-qty-row button {
   width: 34px;
