@@ -949,10 +949,13 @@ body::before {
 }
 
 /* ── Floating cart button and drawer */
+/* bottom 要把手機底部的安全區（iPhone 的 home indicator 橫條、Android 的手勢列）
+   加進去 —— 那塊空間不算在版面高度裡，只寫 18px 的話按鈕會壓在畫面最底緣，
+   看起來像被切掉一半。沒有安全區的裝置（電腦、舊手機）env() 回 0，等於單純的 24px。 */
 .cart-button {
   position: fixed;
   right: 18px;
-  bottom: 18px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 120;
   background: var(--caramel);
   color: var(--cream);
@@ -974,11 +977,15 @@ body::before {
 }
 .cart-backdrop.open { display: block; }
 
+/* 高度用 dvh：手機上 100vh 算的是「工具列收起來時」的高度，工具列還在的時候
+   抽屜會比畫面高，最下面那排送出訂單就被推到畫面外點不到。
+   100vh 留在前面當後備，dvh 不支援的舊瀏覽器（iOS 15.3 以前）還是吃得到舊值。 */
 .cart-drawer {
   position: fixed;
   right: 0;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   width: 360px;
   max-width: 92vw;
   background: var(--white);
@@ -1000,7 +1007,8 @@ body::before {
 .cart-item-controls { font-size:13px; color:var(--ink-faint); display:flex; align-items:center; gap:8px; }
 .cart-item-controls button { padding:4px 8px; border-radius:4px; border:1px solid var(--beige); background:none; cursor:pointer; }
 .cart-item-remove button { background:none;border:1px solid var(--beige);padding:6px 8px;border-radius:4px;cursor:pointer; }
-.cart-footer { padding:12px;border-top:1px solid var(--parchment); display:flex; flex-direction:column; gap:10px; }
+/* 底部再墊一層安全區，送出訂單那排才不會壓在 home indicator／手勢列上面 */
+.cart-footer { padding:12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); border-top:1px solid var(--parchment); display:flex; flex-direction:column; gap:10px; }
 .cart-total { font-family:'DM Serif Display',serif;font-size:16px;color:var(--caramel); }
 .cart-actions { display:flex; gap:8px; }
 .cart-clear { background:none;border:1px solid var(--beige);padding:8px 12px;border-radius:6px;cursor:pointer; }
