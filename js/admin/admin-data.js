@@ -134,13 +134,13 @@ function bySheetSortOrder(a, b) {
      · 完整網址（http / data:）→ 原樣輸出
      · 其他 → encodeURI(MENU_IMAGE_BASE + 值)
 
-   ⚠ MENU_IMAGE_BASE 是 'https://sandywow.github.io/kigoMenu/src/' —— 它自己
+   ⚠ MENU_IMAGE_BASE 是 'https://sandywow.github.io/kigoOrder/src/' —— 它自己
      已經以 src/ 結尾。所以儲存格裡的相對寫法是「檔名」，不是「src/檔名」；
-     把 src/ 也寫進去會變成 .../kigoMenu/src/src/xxx.jpg（兩個站都 404）。
+     把 src/ 也寫進去會變成 .../kigoOrder/src/src/xxx.jpg（兩個站都 404）。
 
    所以後台顯示與儲存格之間要換算：
-     儲存格 'BANNER FISH-03.jpg'                     ↔ 後台 'src/BANNER FISH-03.jpg'
-     儲存格 'https://…/kigoMenu/src/BANNER%20FISH-03.jpg' ↔ 後台 'src/BANNER FISH-03.jpg'
+     儲存格 'BANNER FISH-03.webp'                     ↔ 後台 'src/BANNER FISH-03.webp'
+     儲存格 'https://…/kigoOrder/src/BANNER%20FISH-03.webp' ↔ 後台 'src/BANNER FISH-03.webp'
      儲存格 'https://其他網站/x.jpg'（不在 imageBase 底下）↔ 後台原樣顯示、原樣存回
 
    前台完全不受影響：它拿到的是 GAS 用 imageBase 組好的完整網址；匯出的

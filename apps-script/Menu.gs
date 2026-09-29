@@ -29,9 +29,10 @@
 
 var MENU_CODE_VERSION = 1;
 
-// 圖片統一放 menuWeb 的 GitHub Pages，兩個站讀到的都是同一份絕對網址。
+// 圖片統一放 orderWeb 的 GitHub Pages，兩個站讀到的都是同一份絕對網址。
 // 工作表裡也可以只填檔名（例如 lemon cake-01.jpg），會自動補上這段前綴。
-var MENU_IMAGE_BASE = 'https://sandywow.github.io/kigoMenu/src/';
+// 新增／替換 Banner 或商品圖，只要把檔案放進 orderWeb/src/ 就好，menuWeb 不用再存一份。
+var MENU_IMAGE_BASE = 'https://sandywow.github.io/kigoOrder/src/';
 
 var MENU_SHEET_ITEMS      = 'Items';
 var MENU_SHEET_ITEM_CATS  = 'ItemCategories';
