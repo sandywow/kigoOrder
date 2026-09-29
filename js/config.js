@@ -267,7 +267,7 @@ const landingData = {
   showDate: false,
   dateSeasonLabel: "Spring Menu",
   heroImage: null,
-  bannerImages: ["src/BANNER AFFOGATO-04.jpg","src/BANNER FISH-03.jpg","src/BANNER POTATO-02.jpg"],
+  bannerImages: ["src/BANNER AFFOGATO-04.webp","src/BANNER FISH-03.webp","src/BANNER POTATO-02.webp"],
   heroBadge: "當季限定",
   heroTitle: "草莓千層酥",
   heroSubtitle: "本週限定 · 每日限量",
