@@ -956,17 +956,36 @@ function initLanding() {
   // 遠端補上海報後圖只是畫進一個看不見的容器裡，畫面上永遠不會出現。
   if (bannerSection) bannerSection.style.display = '';
 
-  // 沒有快取時先別畫 config.js 的舊海報，等遠端回來（見 js/menu-api.js 的 bannerReady）。
-  // 容器留著、內容清空 —— #banner-display 的 aspect-ratio 會把位置佔住。
-  const waitingForRemoteBanner = !!(window.KigoMenuApi && window.KigoMenuApi.bannerReady &&
-    !window.KigoMenuApi.bannerReady());
+  // 沒有快取時不畫 config.js 的舊海報（見 js/menu-api.js 的 bannerState）：
+  // 等遠端時顯示咖啡杯載入動畫；遠端失敗就整區隱藏，不退回舊海報。
+  const menuApi = window.KigoMenuApi;
+  const bannerState = (menuApi && menuApi.bannerState) ? menuApi.bannerState() : 'ready';
+  const hasRemoteBanner = !!(menuApi && menuApi.remote && menuApi.remote.landingKeys &&
+    menuApi.remote.landingKeys.bannerImages);
 
-  if (waitingForRemoteBanner) {
+  if (bannerState === 'waiting') {
+    if (bannerDisplay) {
+      bannerDisplay.style.height = '';
+      bannerDisplay.innerHTML = `
+        <div class="banner-loading" role="status" aria-label="海報載入中">
+          <svg class="banner-loading-cup" viewBox="0 0 64 64" aria-hidden="true">
+            <path class="steam s1" d="M24 22c-3-4 3-6 0-10s3-6 0-9"/>
+            <path class="steam s2" d="M32 22c-3-4 3-6 0-10s3-6 0-9"/>
+            <path class="steam s3" d="M40 22c-3-4 3-6 0-10s3-6 0-9"/>
+            <path class="cup" d="M14 28h36v8c0 9-7 16-16 16h-4c-9 0-16-7-16-16z"/>
+            <path class="cup" d="M50 31h3a6 6 0 0 1 0 12h-4"/>
+            <path class="cup" d="M10 57h44"/>
+          </svg>
+          <div class="banner-loading-text">Brewing</div>
+        </div>`;
+    }
+  } else if (bannerState === 'failed' && !hasRemoteBanner) {
     if (bannerDisplay) bannerDisplay.innerHTML = '';
+    if (bannerSection) bannerSection.style.display = 'none';
   } else if (bannerCarouselImages.length) {
     // 上一輪留下的單張圖／佔位符要清掉，否則會疊在輪播圖底下。
     // .banner-slide 不能清 —— renderBannerSlide 要靠舊的那張做淡入交接。
-    const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder') : null;
+    const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder, .banner-loading') : null;
     if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
     renderBannerSlide(0, true);
     scheduleBannerCarousel();

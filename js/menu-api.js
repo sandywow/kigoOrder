@@ -32,16 +32,19 @@
 
   /* ── 海報要不要先等遠端 ──
      沒有快取（第一次來、無痕模式、快取過期）時，config.js 的海報是舊圖，
-     直接畫出來會「先閃舊海報、一秒後才換新的」。所以這種情況海報區先留空
-     （#banner-display 有 aspect-ratio 佔位，版面不會跳），等遠端回來再畫；
-     遠端太慢或失敗，BANNER_WAIT_MS 後退回 config.js 的圖。
-     js/menu.js 的 initLanding() 透過 KigoMenuApi.bannerReady() 讀這個狀態。 */
-  var BANNER_WAIT_MS = 3000;
-  var bannerReady = false;
+     直接畫出來會「先閃舊海報、一秒後才換新的」。所以這種情況海報區先顯示
+     咖啡杯載入動畫，等遠端回來再畫。
+       'waiting' → 還在等遠端，顯示載入動畫
+       'ready'   → 有遠端資料（或快取），照常畫
+       'failed'  → 遠端失敗或超過 BANNER_WAIT_MS，整個海報區隱藏，
+                   刻意不退回 config.js 的舊海報；遠端之後才到的話還是會補畫
+     js/menu.js 的 initLanding() 透過 KigoMenuApi.bannerState() 讀這個狀態。 */
+  var BANNER_WAIT_MS = 10000;
+  var bannerState = 'waiting';
 
-  function markBannerReady() {
-    if (bannerReady) return;
-    bannerReady = true;
+  function settleBanner(state) {
+    if (bannerState !== 'waiting') return;
+    bannerState = state;
     whenReady(function () {
       if (safeToApplyNow()) repaint();
     });
@@ -179,7 +182,7 @@
       if (!cached.savedAt || Date.now() - cached.savedAt > CACHE_MAX_AGE_MS) return;
       if (applyPayload(cached.payload)) {
         appliedSignature = signatureOf(cached.payload);
-        bannerReady = true;   // 快取就是上次的遠端資料，直接畫
+        bannerState = 'ready';   // 快取就是上次的遠端資料，直接畫
       }
     } catch (e) {}
   })();
@@ -198,7 +201,7 @@
           // 安靜地沿用快取／config.js，客人照樣點得到餐，也不要污染快取
           console.warn('[menu-api] 遠端還沒有菜單資料，沿用本機資料',
             (payload && payload.error) || (payload && payload.message) || '');
-          markBannerReady();
+          settleBanner('failed');
           return;
         }
 
@@ -216,22 +219,22 @@
         whenReady(function () {
           if (!safeToApplyNow()) {
             // 客人正在點餐，先擱著，等回到首頁（結完單／清空購物車）再套
+            // 海報維持 'waiting'，回到首頁時 flushPending 會連海報一起補畫
             pendingPayload = payload;
-            bannerReady = true;   // 回到首頁時 flushPending 會連海報一起重畫
             return;
           }
           if (applyPayload(payload)) {
             appliedSignature = signature;
-            bannerReady = true;
+            bannerState = 'ready';   // 就算已經逾時成 'failed'，晚到的資料一樣補畫
             repaint();
           } else {
-            markBannerReady();
+            settleBanner('failed');
           }
         });
       })
       .catch(function (err) {
         console.warn('[menu-api] 讀取遠端菜單失敗，沿用本機資料', err);
-        markBannerReady();
+        settleBanner('failed');
       });
   }
 
@@ -242,6 +245,7 @@
     pendingPayload = null;
     if (applyPayload(payload)) {
       appliedSignature = signatureOf(payload);
+      bannerState = 'ready';
       repaint();
     }
   }
@@ -257,9 +261,11 @@
 
   if (typeof fetch === 'function' && endpoint()) {
     refresh();
-    if (!bannerReady) setTimeout(markBannerReady, BANNER_WAIT_MS);
+    if (bannerState === 'waiting') {
+      setTimeout(function () { settleBanner('failed'); }, BANNER_WAIT_MS);
+    }
   } else {
-    bannerReady = true;
+    bannerState = 'ready';
   }
 
   // 除錯用：Console 打 KigoMenuApi.refresh()
@@ -267,6 +273,6 @@
   // 順便也方便在 Console 確認遠端到底套進了什麼。
   window.KigoMenuApi = {
     refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote,
-    bannerReady: function () { return bannerReady; }
+    bannerState: function () { return bannerState; }
   };
 })();
