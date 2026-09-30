@@ -956,7 +956,14 @@ function initLanding() {
   // 遠端補上海報後圖只是畫進一個看不見的容器裡，畫面上永遠不會出現。
   if (bannerSection) bannerSection.style.display = '';
 
-  if (bannerCarouselImages.length) {
+  // 沒有快取時先別畫 config.js 的舊海報，等遠端回來（見 js/menu-api.js 的 bannerReady）。
+  // 容器留著、內容清空 —— #banner-display 的 aspect-ratio 會把位置佔住。
+  const waitingForRemoteBanner = !!(window.KigoMenuApi && window.KigoMenuApi.bannerReady &&
+    !window.KigoMenuApi.bannerReady());
+
+  if (waitingForRemoteBanner) {
+    if (bannerDisplay) bannerDisplay.innerHTML = '';
+  } else if (bannerCarouselImages.length) {
     // 上一輪留下的單張圖／佔位符要清掉，否則會疊在輪播圖底下。
     // .banner-slide 不能清 —— renderBannerSlide 要靠舊的那張做淡入交接。
     const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder') : null;

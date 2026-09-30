@@ -30,6 +30,23 @@
   var appliedSignature = null;
   var pendingPayload = null;   // 有東西在購物車時先擱著，等結完單再套
 
+  /* ── 海報要不要先等遠端 ──
+     沒有快取（第一次來、無痕模式、快取過期）時，config.js 的海報是舊圖，
+     直接畫出來會「先閃舊海報、一秒後才換新的」。所以這種情況海報區先留空
+     （#banner-display 有 aspect-ratio 佔位，版面不會跳），等遠端回來再畫；
+     遠端太慢或失敗，BANNER_WAIT_MS 後退回 config.js 的圖。
+     js/menu.js 的 initLanding() 透過 KigoMenuApi.bannerReady() 讀這個狀態。 */
+  var BANNER_WAIT_MS = 3000;
+  var bannerReady = false;
+
+  function markBannerReady() {
+    if (bannerReady) return;
+    bannerReady = true;
+    whenReady(function () {
+      if (safeToApplyNow()) repaint();
+    });
+  }
+
   /* ── 遠端已經給過哪些資料 ──
      js/menu.js 的「LOAD ADMIN OVERRIDES」在本檔之後才執行，會把
      localStorage 的 kigoMenuConfig 無條件寫回這幾個全域結構。
@@ -160,7 +177,10 @@
       var cached = JSON.parse(raw);
       if (!cached || cached.site !== SITE || !cached.payload) return;
       if (!cached.savedAt || Date.now() - cached.savedAt > CACHE_MAX_AGE_MS) return;
-      if (applyPayload(cached.payload)) appliedSignature = signatureOf(cached.payload);
+      if (applyPayload(cached.payload)) {
+        appliedSignature = signatureOf(cached.payload);
+        bannerReady = true;   // 快取就是上次的遠端資料，直接畫
+      }
     } catch (e) {}
   })();
 
@@ -178,6 +198,7 @@
           // 安靜地沿用快取／config.js，客人照樣點得到餐，也不要污染快取
           console.warn('[menu-api] 遠端還沒有菜單資料，沿用本機資料',
             (payload && payload.error) || (payload && payload.message) || '');
+          markBannerReady();
           return;
         }
 
@@ -196,16 +217,21 @@
           if (!safeToApplyNow()) {
             // 客人正在點餐，先擱著，等回到首頁（結完單／清空購物車）再套
             pendingPayload = payload;
+            bannerReady = true;   // 回到首頁時 flushPending 會連海報一起重畫
             return;
           }
           if (applyPayload(payload)) {
             appliedSignature = signature;
+            bannerReady = true;
             repaint();
+          } else {
+            markBannerReady();
           }
         });
       })
       .catch(function (err) {
         console.warn('[menu-api] 讀取遠端菜單失敗，沿用本機資料', err);
+        markBannerReady();
       });
   }
 
@@ -229,10 +255,18 @@
     }).observe(landing, { attributes: true, attributeFilter: ['class'] });
   });
 
-  if (typeof fetch === 'function') refresh();
+  if (typeof fetch === 'function' && endpoint()) {
+    refresh();
+    if (!bannerReady) setTimeout(markBannerReady, BANNER_WAIT_MS);
+  } else {
+    bannerReady = true;
+  }
 
   // 除錯用：Console 打 KigoMenuApi.refresh()
   // remote 給 js/menu.js 判斷「哪些欄位不要再被後台舊值蓋掉」，
   // 順便也方便在 Console 確認遠端到底套進了什麼。
-  window.KigoMenuApi = { refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote };
+  window.KigoMenuApi = {
+    refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote,
+    bannerReady: function () { return bannerReady; }
+  };
 })();
