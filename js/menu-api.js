@@ -41,13 +41,31 @@
      js/menu.js 的 initLanding() 透過 KigoMenuApi.bannerState() 讀這個狀態。 */
   var BANNER_WAIT_MS = 10000;
   var bannerState = 'waiting';
+  // 海報狀態變了但當下不能重畫（客人不在首頁）→ 記著，回到首頁再畫
+  var bannerDirty = false;
 
   function settleBanner(state) {
     if (bannerState !== 'waiting') return;
     bannerState = state;
+    repaintBanner();
+  }
+
+  // 重畫首頁只是把 landingData 畫出來，跟購物車無關，所以只要求「首頁看得到」。
+  // 首頁隱藏時不能畫：海報高度是用容器寬度算的，隱藏時寬度是 0。
+  function repaintBanner() {
     whenReady(function () {
-      if (safeToApplyNow()) repaint();
+      if (onLanding()) repaint();
+      else bannerDirty = true;
     });
+  }
+
+  // 海報圖跟購物車的 { cat, idx } 無關，客人點餐中也可以先換上，
+  // 不必跟著整包菜單一起擱著（否則回首頁時會一直看到載入動畫）。
+  function applyBannerOnly(payload) {
+    var imgs = payload && payload.landingData && payload.landingData.bannerImages;
+    if (!Array.isArray(imgs) || !imgs.length) return;   // 空陣列＝還沒設定，同 applyPayload
+    landingData.bannerImages = imgs.slice();
+    remote.landingKeys.bannerImages = true;
   }
 
   /* ── 遠端已經給過哪些資料 ──
@@ -145,7 +163,10 @@
     } catch (e) {
       return false;
     }
+    return onLanding();
+  }
 
+  function onLanding() {
     var menuPage = document.getElementById('menu-page');
     if (menuPage && menuPage.classList.contains('visible')) return false;
 
@@ -156,6 +177,7 @@
   }
 
   function repaint() {
+    bannerDirty = false;
     if (typeof initLanding === 'function') initLanding();
   }
 
@@ -219,8 +241,10 @@
         whenReady(function () {
           if (!safeToApplyNow()) {
             // 客人正在點餐，先擱著，等回到首頁（結完單／清空購物車）再套
-            // 海報維持 'waiting'，回到首頁時 flushPending 會連海報一起補畫
             pendingPayload = payload;
+            applyBannerOnly(payload);
+            bannerState = 'ready';
+            repaintBanner();
             return;
           }
           if (applyPayload(payload)) {
@@ -255,7 +279,9 @@
     if (!landing || typeof MutationObserver !== 'function') return;
     // 首頁重新變成 visible 的那一刻就是安全的套用時機
     new MutationObserver(function () {
-      if (landing.classList.contains('visible')) flushPending();
+      if (!landing.classList.contains('visible')) return;
+      flushPending();
+      if (bannerDirty) repaint();
     }).observe(landing, { attributes: true, attributeFilter: ['class'] });
   });
 
