@@ -5,17 +5,76 @@ function getOrderEndpoint() {
   return (state.landingData && state.landingData.orderEndpoint) || null;
 }
 
+/* ── 後台 Token ──
+   讀取與管理訂單都要帶 token（Apps Script 的 orderAdminAuthorize）。
+   跟菜單儲存共用同一個（指令碼屬性 MENU_WRITE_TOKEN），存取方式在 admin-data.js：
+   menuWriteTokenValue / askMenuWriteToken / clearMenuWriteToken。 */
+let orderAuthProblem = null;   // null | 'missing' | 'unauthorized' | 'token not configured'
+let orderTokenAsked = false;   // 輪詢每 4 秒一次：沒有 token 時這次開頁只自動問一次，按取消就不再跳
+
+const ORDER_AUTH_MESSAGES = {
+  'missing': '需要後台 Token 才能讀取與管理訂單',
+  'unauthorized': '後台 Token 不正確，請重新輸入',
+  'token not configured': 'Apps Script 還沒設定 Token（指令碼屬性 MENU_WRITE_TOKEN）'
+};
+
+function orderTokenForPolling() {
+  let token = menuWriteTokenValue();
+  if (!token && !orderTokenAsked) {
+    orderTokenAsked = true;
+    token = askMenuWriteToken();
+  }
+  return token;
+}
+
+// 店家自己按的操作：沒有 token 就問；還是沒有就整個不做（連畫面都不先改）
+function requireOrderToken() {
+  const token = menuWriteTokenValue() || askMenuWriteToken();
+  if (!token) {
+    orderAuthProblem = 'missing';
+    showToast(ORDER_AUTH_MESSAGES.missing);
+  }
+  return token;
+}
+
+function noteOrderAuthFailure(data) {
+  if (!data || (data.error !== 'unauthorized' && data.error !== 'token not configured')) return false;
+  orderAuthProblem = data.error;
+  if (data.error === 'unauthorized') clearMenuWriteToken();   // 存著的那份沒用了，下次重問
+  return true;
+}
+
+// 訂單畫面上「輸入後台 Token」按鈕
+function enterOrderToken() {
+  orderTokenAsked = true;
+  if (!askMenuWriteToken()) return;
+  orderAuthProblem = null;
+  consecutiveFetchFailures = 0;
+  refreshTodayOrders();
+}
+
 async function apiGetOrders(scope, date) {
   const endpoint = getOrderEndpoint();
   if (!endpoint) return null;
+  const token = orderTokenForPolling();
+  if (!token) {
+    orderAuthProblem = 'missing';
+    return null;
+  }
   try {
     let qs = 'action=list' + (scope ? '&scope=' + encodeURIComponent(scope) : '');
     if (date) qs += '&date=' + encodeURIComponent(date);
+    qs += '&token=' + encodeURIComponent(token);
     const url = endpoint + (endpoint.includes('?') ? '&' : '?') + qs;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    return (data && data.ok && Array.isArray(data.orders)) ? data.orders : null;
+    if (noteOrderAuthFailure(data)) return null;
+    if (data && data.ok && Array.isArray(data.orders)) {
+      orderAuthProblem = null;
+      return data.orders;
+    }
+    return null;
   } catch (e) {
     console.warn('apiGetOrders failed', e);
     return null;
@@ -24,17 +83,25 @@ async function apiGetOrders(scope, date) {
 
 // Content-Type 用 text/plain：Apps Script 沒有處理 CORS 預檢(OPTIONS)，
 // 用 application/json 會觸發預檢而直接失敗。
+// 被 token 擋下時回傳 { ok:false, authFailed:true, error:<中文說明> }：
+// 呼叫端看到 authFailed 就知道「伺服器確定沒做」，不用再 probe。
 async function apiPostOrder(payload) {
   const endpoint = getOrderEndpoint();
   if (!endpoint) return null;
+  const token = menuWriteTokenValue();
+  if (!token) return { ok: false, authFailed: true, error: ORDER_AUTH_MESSAGES.missing };
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(Object.assign({}, payload, { token }))
     });
     if (!res.ok) return null;
-    return await res.json();
+    const data = await res.json();
+    if (noteOrderAuthFailure(data)) {
+      return Object.assign({}, data, { authFailed: true, error: ORDER_AUTH_MESSAGES[data.error] });
+    }
+    return data;
   } catch (e) {
     console.warn('apiPostOrder failed', e);
     return null;
@@ -231,6 +298,16 @@ async function refreshTodayOrders() {
   }
 
   if (!orders) {
+    // 被 token 擋下：重試沒有用，清掉畫面上的舊資料（已經不能更新了），改顯示原因
+    if (orderAuthProblem) {
+      todayOrders = [];
+      todayOrdersSignature = '';
+      wrap.innerHTML = `<div class="order-hint">${ORDER_AUTH_MESSAGES[orderAuthProblem]}` +
+        (orderAuthProblem === 'token not configured' ? '' :
+          '<br><button type="button" class="btn-order" onclick="enterOrderToken()">輸入後台 Token</button>') +
+        '</div>';
+      return;
+    }
     consecutiveFetchFailures++;
     if (!todayOrders.length) {
       wrap.innerHTML = `<div class="order-hint">讀取訂單失敗（第 ${consecutiveFetchFailures} 次），持續重試中…<br>若一直沒有恢復，請確認 Apps Script 已重新部署為最新版本。</div>`;
@@ -287,6 +364,7 @@ async function probeOrder(orderId) {
 }
 
 async function setOrderStatus(orderId, status) {
+  if (!requireOrderToken()) return;
   const key = String(orderId);
   const order = findLoadedOrder(orderId);
   const previous = order ? order.status : null;
@@ -304,7 +382,8 @@ async function setOrderStatus(orderId, status) {
       return;
     }
 
-    const probe = await probeOrder(orderId);
+    // 被 token 擋下＝伺服器確定沒改，直接當失敗還原，不用再查
+    const probe = (res && res.authFailed) ? { reachable: true, order: null } : await probeOrder(orderId);
     if (!probe.reachable) {
       // 查不到不代表沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
       clearPendingOp(key, { status });
@@ -332,6 +411,7 @@ async function setOrderPayment(orderId, paymentStatus) {
   const order = findLoadedOrder(orderId);
   const previous = order ? paymentOf(order) : null;
   if (previous === paymentStatus) return;
+  if (!requireOrderToken()) return;
 
   mergePendingOp(key, { paymentStatus });
   patchLoadedOrders(orderId, { paymentStatus });
@@ -344,7 +424,8 @@ async function setOrderPayment(orderId, paymentStatus) {
       return;
     }
 
-    const probe = await probeOrder(orderId);
+    // 被 token 擋下＝伺服器確定沒改，直接當失敗還原，不用再查
+    const probe = (res && res.authFailed) ? { reachable: true, order: null } : await probeOrder(orderId);
     if (!probe.reachable) {
       // 查不到不等於沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
       clearPendingOp(key, { paymentStatus });
@@ -708,6 +789,7 @@ function deleteWholeOrder() {
 async function deleteOrderById(orderId) {
   const key = String(orderId);
   if (!confirm(`確定要刪除訂單 ${orderId} 嗎？\n\nGoogle 試算表上這筆訂單的所有資料都會一併移除，無法復原。`)) return;
+  if (!requireOrderToken()) return;
 
   const removedToday = todayOrders.find(o => String(o.orderId) === key);
   const removedHistory = historyOrders.find(o => String(o.orderId) === key);
@@ -727,7 +809,8 @@ async function deleteOrderById(orderId) {
       return;
     }
 
-    const probe = await probeOrder(orderId);
+    // 被 token 擋下＝伺服器確定沒刪，當作「還在」把訂單放回畫面
+    const probe = (res && res.authFailed) ? { reachable: true, order: { orderId } } : await probeOrder(orderId);
     if (!probe.reachable) {
       // 查不到不代表沒刪成功，不要把訂單還原回畫面（之前就是這樣誤報的）
       pendingDeletes.delete(key);
@@ -818,6 +901,7 @@ async function saveOrderEdit() {
   const items = editingOrder.items.filter(i => i.quantity > 0);
   if (!items.length) { showToast('訂單至少要保留一個品項'); return; }
   if (items.some(i => !i.name)) { showToast('還有品項沒有選擇'); return; }
+  if (!requireOrderToken()) return;
 
   // 金額只算收費數量，招待不計入
   const total = items.reduce((sum, i) => sum + i.unitPrice * (i.quantity - (i.freeQty || 0)), 0);
@@ -900,7 +984,8 @@ async function saveOrderEdit() {
       return;
     }
 
-    const probe = await probeOrder(orderId);
+    // 被 token 擋下＝伺服器確定沒改，直接當失敗還原，不用再查
+    const probe = (res && res.authFailed) ? { reachable: true, order: null } : await probeOrder(orderId);
     if (!probe.reachable) {
       clearPendingOp(key, patch);
       return;
@@ -1097,6 +1182,7 @@ async function clearTodayOrders() {
     showToast('尚未設定訂單 API');
     return;
   }
+  if (!requireOrderToken()) return;
   if (!confirm('確定要清空今天的所有訂單嗎？\n\nGoogle 試算表上今天的訂單會全部刪除，無法復原。\n（昨天以前的訂單不受影響）')) return;
 
   const btn = document.getElementById('btn-clear-today');
@@ -1107,6 +1193,9 @@ async function clearTodayOrders() {
 
     if (res && res.ok) {
       showToast(`已清空今日訂單（${res.deletedRows} 列）`);
+    } else if (res && res.authFailed) {
+      // 伺服器確定沒刪，不用再查剩下幾筆
+      showToast('清除失敗：' + res.error);
     } else {
       // 跟其他寫入一樣：查不到不等於失敗，用實際剩下的訂單來判斷
       const orders = await apiGetOrders('today');

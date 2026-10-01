@@ -245,8 +245,9 @@ function saveMenuResult(payload) {
      不想自己想一串就在編輯器執行 menuWriteGenerateToken()，它會產生、存好，
      並在執行紀錄印出來一次（之後就只看得到指紋）。
 
-   ⚠ 這個 token 只管 saveMenu。訂單 API（doPost 的其他 action 與建立訂單的
-     fallback）完全不經過這裡，點餐前台不受任何影響。
+   ⚠ 這個 token 也是訂單管理（list / update* / deleteOrder / clearToday /
+     後台補登）的 token，見 Code.gs 的 orderAdminAuthorize。
+     客人送單（建立訂單的 fallback）不需要 token，點餐前台不受影響。
    ═════════════════════════════ */
 
 var MENU_WRITE_TOKEN_PROPERTY = 'MENU_WRITE_TOKEN';

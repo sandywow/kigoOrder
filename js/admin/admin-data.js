@@ -496,7 +496,7 @@ function setMenuWriteToken(token) {
   if (!value) return clearMenuWriteToken();
   try {
     localStorage.setItem(MENU_WRITE_TOKEN_KEY, value);
-    showToast('菜單寫入 Token 已存在這台裝置');
+    showToast('後台 Token 已存在這台裝置');
   } catch (e) {
     console.error('[admin] 無法儲存 Token', e);
     showToast('這個瀏覽器不讓我儲存 Token');
@@ -515,7 +515,8 @@ function clearMenuWriteToken() {
 function askMenuWriteToken() {
   if (typeof window === 'undefined' || typeof window.prompt !== 'function') return '';
   var entered = window.prompt(
-    '請輸入菜單寫入 Token（Apps Script 專案屬性 MENU_WRITE_TOKEN 的值）。\n' +
+    '請輸入後台 Token（Apps Script 專案屬性 MENU_WRITE_TOKEN 的值）。\n' +
+    '儲存菜單、讀取與管理訂單都要用到。\n' +
     '只會問這一次，之後存在這台裝置的瀏覽器裡。');
   if (entered === null) return '';
   return setMenuWriteToken(entered);

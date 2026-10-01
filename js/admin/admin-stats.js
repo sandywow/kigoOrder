@@ -93,7 +93,9 @@ async function renderSalesStats() {
   }
   if (!orders) {
     document.getElementById('stat-items').innerHTML =
-      '<div class="history-empty">讀取統計資料失敗，請稍後再試。</div>';
+      '<div class="history-empty">' +
+      (orderAuthProblem ? ORDER_AUTH_MESSAGES[orderAuthProblem] : '讀取統計資料失敗，請稍後再試。') +
+      '</div>';
     return;
   }
 

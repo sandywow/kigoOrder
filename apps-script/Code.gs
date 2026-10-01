@@ -12,12 +12,14 @@
  * ⚠ 每次修改這份程式碼後，都要「部署 → 管理部署作業 → 編輯 → 版本選新版本 → 部署」，
  *   否則 /exec 網址還是跑舊版程式碼。
  *
- * 支援的呼叫：
- *   GET  ?action=list                     → 回傳全部訂單
- *   GET  ?action=list&scope=today         → 只回傳今天的訂單
- *   GET  ?action=list&scope=month         → 只回傳本月的訂單
- *   GET  ?action=list&scope=date&date=YYYY-MM-DD → 只回傳指定日期的訂單
- *   POST {items:[...], ...}          → 新增一筆訂單（前端送出訂單時用）
+ * 支援的呼叫（標 🔒 的要帶 token，值是指令碼屬性 MENU_WRITE_TOKEN，見 orderAdminAuthorize）：
+ *   🔒 GET  ?action=list&token=…          → 回傳全部訂單
+ *   🔒 GET  ?action=list&scope=today      → 只回傳今天的訂單
+ *   🔒 GET  ?action=list&scope=month      → 只回傳本月的訂單
+ *   🔒 GET  ?action=list&scope=date&date=YYYY-MM-DD → 只回傳指定日期的訂單
+ *   POST {items:[...], ...}          → 新增一筆訂單（前端送出訂單時用，不需要 token）
+ *   🔒 POST {manual:true, token, ...} → 後台補登訂單
+ *   以下 POST 都要帶 token：
  *   POST {action:'updateStatus', orderId, status}  → 更新訂單狀態
  *   POST {action:'updatePayment', orderId, paymentStatus} → 更新付款狀態
  *   POST {action:'updateOrder', orderId, items:[...]}  → 修改訂單內容
@@ -38,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 5;   // v5: 新增菜單寫入 API action=saveMenu（實作在 MenuWrite.gs）
+var CODE_VERSION = 6;   // v6: 訂單管理（list / update* / delete / clearToday / 後台補登）需要 token
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -84,6 +86,28 @@ function col(name) {
 }
 
 /* ═════════════════════════════
+   後台驗證
+
+   跟 saveMenu 共用同一個 token（指令碼屬性 MENU_WRITE_TOKEN，見 MenuWrite.gs），
+   後台只要輸入一次。還沒設定 token 時一律拒絕（fail closed），
+   不會退回成誰都能管訂單。
+   ═════════════════════════════ */
+var ADMIN_ACTIONS = ['updateStatus', 'updatePayment', 'updateOrder', 'deleteOrder', 'clearToday'];
+
+// 回傳 null = 通過；回傳物件 = 直接當成回應送出
+function orderAdminAuthorize(token) {
+  var expected = menuWriteStoredToken();
+  if (!expected) {
+    return { ok: false, error: 'token not configured' };
+  }
+  // 錯誤訊息不透露任何線索；比對方式見 MenuWrite.gs 的 menuWriteSecretEquals
+  if (!menuWriteSecretEquals(token, expected)) {
+    return { ok: false, error: 'unauthorized' };
+  }
+  return null;
+}
+
+/* ═════════════════════════════
    進入點
    ═════════════════════════════ */
 function doPost(e) {
@@ -92,6 +116,13 @@ function doPost(e) {
       throw new Error('empty request body');
     }
     var payload = JSON.parse(e.postData.contents);
+
+    // 訂單管理只有後台能做。/exec 網址寫在公開的前台程式碼裡，
+    // 不擋的話任何人都能刪單、清空今天的訂單。客人送單（沒有 action）不需要 token。
+    if (ADMIN_ACTIONS.indexOf(payload.action) !== -1 || payload.manual) {
+      var denied = orderAdminAuthorize(payload.token);
+      if (denied) return jsonResponse(denied);
+    }
 
     if (payload.action === 'updateStatus') {
       return handleUpdateStatus(payload);
@@ -126,6 +157,9 @@ function doGet(e) {
   try {
     var params = (e && e.parameter) || {};
     if (params.action === 'list') {
+      // 訂單裡有桌號和暱稱，只給後台看
+      var denied = orderAdminAuthorize(params.token);
+      if (denied) return jsonResponse(denied);
       return jsonResponse({
         ok: true,
         orders: listOrders(params.scope, params.date)
