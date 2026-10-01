@@ -8,7 +8,10 @@
 //   首頁 banner 就是這樣一直停在 config.js 的 src/BANNER*.jpg。
 //   Sheets 沒有管到的欄位（例如 orderEndpoint、桌號）照舊沿用後台設定。
 (function () {
-  var stored = localStorage.getItem('kigoMenuConfig');
+  // 瀏覽器封鎖網站資料時，光是讀 localStorage 就會丟 SecurityError。
+  // 這裡沒接住的話整支 menu.js 會停在這行，客人就完全不能點餐。
+  var stored = null;
+  try { stored = localStorage.getItem('kigoMenuConfig'); } catch (e) {}
   if (!stored) return;
   var remote = (window.KigoMenuApi && window.KigoMenuApi.remote) || {};
   var remoteLanding = remote.landingKeys || {};
@@ -641,6 +644,7 @@ function changeModalQty(delta) {
 
 function confirmAddToCart() {
   if (!pendingCartSelection) return;
+  if (blockedBySubmitting()) return;
   const { cat, idx } = pendingCartSelection;
   const item = (menuData[cat] || [])[idx];
   if (!item) { closeAddToCartModal(); return; }
@@ -715,15 +719,16 @@ function renderCart() {
 }
 
 function changeQty(i, delta) {
+  if (blockedBySubmitting()) return;
   if (!cart[i]) return;
   cart[i].qty += delta;
   if (cart[i].qty <= 0) cart.splice(i, 1);
   renderCart();
 }
 
-function removeCartItem(i) { cart.splice(i, 1); renderCart(); }
+function removeCartItem(i) { if (blockedBySubmitting()) return; cart.splice(i, 1); renderCart(); }
 
-function clearCart() { if (!confirm('清空購物車？')) return; cart.length = 0; renderCart(); }
+function clearCart() { if (blockedBySubmitting()) return; if (!confirm('清空購物車？')) return; cart.length = 0; renderCart(); }
 
 function saveOrderToHistory(order) {
   try {
@@ -748,7 +753,8 @@ function generateOrderId() {
   try { seq = JSON.parse(localStorage.getItem('kigoOrderSeq')); } catch (e) {}
   if (!seq || seq.date !== dateKey) seq = { date: dateKey, count: 0 };
   seq.count += 1;
-  localStorage.setItem('kigoOrderSeq', JSON.stringify(seq));
+  // 寫不進去（空間滿了、被封鎖）也不能擋住送單
+  try { localStorage.setItem('kigoOrderSeq', JSON.stringify(seq)); } catch (e) {}
 
   return `KG${yy}${mm}${dd}${String(seq.count).padStart(3, '0')}`;
 }
@@ -781,18 +787,11 @@ function setReceiptRow(rowId, valueId, value) {
   }
 }
 
-function setReceiptOrderId(orderId) {
-  const el = document.getElementById('receipt-order-id');
-  if (el) el.textContent = orderId;
-  if (lastOrder) lastOrder.orderId = orderId;
-}
-
-function showOrderSuccess(order, orderIdPending) {
+function showOrderSuccess(order) {
   lastOrder = order;
 
-  // 編號由伺服器發，回應到之前先顯示「產生中…」，不要先寫一個之後會對不上的號碼
-  document.getElementById('receipt-order-id').textContent =
-    orderIdPending ? '產生中…' : (order.orderId || '');
+  // 走到這裡時伺服器已經回應了，order.orderId 就是試算表上的編號
+  document.getElementById('receipt-order-id').textContent = order.orderId || '';
   document.getElementById('receipt-order-time').textContent = formatOrderTime(order.createdAt);
   document.getElementById('receipt-table-number').textContent = order.tableNumber || '—';
   // 暱稱沒填就整列不顯示，收據才不會多一行空的
@@ -815,6 +814,7 @@ function backToMenuFromSuccess() {
 }
 
 function submitOrder() {
+  if (orderSubmitting) return;
   if (!cart.length) { showToast('購物車為空'); return; }
   // 送單是最不能送錯桌的一刻，這裡再確認一次入座資訊沒過期。
   // 過期的話畫面會被 session 過期那層蓋掉，這張單就不送了。
@@ -850,28 +850,37 @@ function submitOrder() {
     }
   };
 
-  saveOrderToHistory(payload);
   // 剛送出一單，人顯然還在店裡，時效從現在重新起算，免得續攤加點時被叫去重填
   saveSeating();
 
   const endpoint = landingData.orderEndpoint;
 
-  // 訂單已經同步寫進本機紀錄，先讓客人立刻看到成功頁，
-  // 不用等 Google Apps Script 的網路來回（常有好幾秒延遲）。
-  // 編號要等伺服器發，所以先顯示「產生中…」，回應到了再填上。
-  cart.length = 0;
-  renderCart();
-  closeCart();
-  showOrderSuccess(payload, !!endpoint);
+  // 沒有設定送單網址（本機測試）就只存本機紀錄
+  if (!endpoint) {
+    saveOrderToHistory(payload);
+    finishOrder(payload);
+    return;
+  }
 
-  if (!endpoint) return;
+  // 一定要等伺服器回 ok 才算成功。以前是先顯示成功頁、背景再送，
+  // 送失敗客人也不知道，店家那邊就漏單了。
+  orderSubmitting = true;
+  setOrderSubmittingUi(true);
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), ORDER_TIMEOUT_MS) : null;
+  const done = () => {
+    clearTimeout(timer);
+    orderSubmitting = false;
+    setOrderSubmittingUi(false);
+  };
 
   // Content-Type 用 text/plain：Google Apps Script Web App 沒有處理 CORS 預檢(OPTIONS)，
   // 用 application/json 會觸發預檢而直接失敗。body 內容仍是 JSON 字串，後端自行 JSON.parse。
   fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: controller ? controller.signal : undefined
   })
     .then(res => {
       if (!res.ok) throw new Error('伺服器回應錯誤');
@@ -879,14 +888,57 @@ function submitOrder() {
     })
     .then(data => {
       if (!data || data.ok === false) throw new Error((data && data.error) || '伺服器回應錯誤');
-      // 以伺服器發的編號為準，才會跟 Google 試算表上的一致
-      setReceiptOrderId(data.orderId || payload.orderId);
+      return data;
     })
-    .catch(err => {
+    .then(data => {
+      done();
+      // 以伺服器發的編號為準，才會跟 Google 試算表上的一致
+      if (data.orderId) payload.orderId = data.orderId;
+      saveOrderToHistory(payload);
+      finishOrder(payload);
+    }, err => {
+      done();
       console.error('Sync order to Sheets failed:', err);
-      // 連不上伺服器時，退回顯示本機備用編號，至少讓客人有號碼可報
-      setReceiptOrderId(payload.orderId);
+      // 購物車原封不動留著，客人可以直接再按一次。
+      // 逾時的話伺服器可能其實已經收到了（伺服器不會擋重複的單），
+      // 所以請客人先跟店員確認，免得同一張單做兩份。
+      const timedOut = err && err.name === 'AbortError';
+      showToast(timedOut
+        ? '連線逾時，為避免重複下單\n請向店員確認訂單是否送出'
+        : '訂單送出失敗\n請再按一次「送出訂單」', 6000);
     });
+}
+
+const ORDER_TIMEOUT_MS = 30000;   // 伺服器搶鎖最多等 20 秒，再留一點餘裕
+let orderSubmitting = false;
+
+// 送單中：按鈕改成「送出中…」並停用，購物車裡的按鈕一起擋住，
+// 免得送出的內容跟畫面上的購物車對不起來
+function setOrderSubmittingUi(busy) {
+  const drawer = document.getElementById('cart-drawer');
+  if (drawer) drawer.classList.toggle('is-submitting', busy);
+  const sending = document.getElementById('order-sending');
+  if (sending) {
+    sending.classList.toggle('open', busy);
+    sending.setAttribute('aria-hidden', String(!busy));
+  }
+  document.querySelectorAll('.cart-submit').forEach(btn => {
+    btn.disabled = busy;
+    btn.textContent = busy ? '送出中…' : '送出訂單';
+  });
+}
+
+function blockedBySubmitting() {
+  if (!orderSubmitting) return false;
+  showToast('訂單送出中，請稍候');
+  return true;
+}
+
+function finishOrder(payload) {
+  cart.length = 0;
+  renderCart();
+  closeCart();
+  showOrderSuccess(payload);
 }
 /* ═══════════════════════════════════
    INIT

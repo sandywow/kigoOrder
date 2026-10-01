@@ -280,5 +280,20 @@
     </div>
   </div>
 </aside>
+
+<!-- 送單中的等待畫面（js/menu.js setOrderSubmittingUi 控制） -->
+<div id="order-sending" class="order-sending" role="status" aria-live="polite" aria-hidden="true">
+  <div class="order-sending-card">
+    <svg class="order-sending-cup" viewBox="0 0 64 64" aria-hidden="true">
+      <path class="steam s1" d="M24 22c-3-4 3-6 0-10s3-6 0-9"/>
+      <path class="steam s2" d="M32 22c-3-4 3-6 0-10s3-6 0-9"/>
+      <path class="steam s3" d="M40 22c-3-4 3-6 0-10s3-6 0-9"/>
+      <path class="cup" d="M14 28h36v8c0 9-7 16-16 16h-4c-9 0-16-7-16-16z"/>
+      <path class="cup" d="M50 31h3a6 6 0 0 1 0 12h-4"/>
+    </svg>
+    <div class="order-sending-shadow" aria-hidden="true"></div>
+    <div class="order-sending-text">點單正在路上…</div>
+  </div>
+</div>
 </body>
 </html>

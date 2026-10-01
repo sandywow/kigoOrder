@@ -1061,6 +1061,86 @@ body::before {
 .cart-actions { display:flex; gap:8px; }
 .cart-clear { background:none;border:1px solid var(--beige);padding:8px 12px;border-radius:6px;cursor:pointer; }
 .cart-submit { background:var(--caramel);color:var(--cream);border:none;padding:8px 12px;border-radius:6px;cursor:pointer; }
+.cart-submit:disabled { opacity: 0.7; cursor: wait; }
+/* 送單中購物車內容不能改（見 js/menu.js setOrderSubmittingUi） */
+.cart-drawer.is-submitting .cart-items,
+.cart-drawer.is-submitting .cart-clear { opacity: 0.55; pointer-events: none; }
+
+/* 送單中的等待畫面：蓋在購物車（z-index 120）上面、toast（150）下面，
+   送失敗時的提示才看得到 */
+.order-sending {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  /* 不用卡片框，杯子和文字直接放在淡米色遮罩上；
+     遮罩要夠亮，焦糖色線條才看得清楚 */
+  background: rgba(247, 243, 236, 0.92);
+}
+.order-sending.open { display: flex; animation: orderSendingIn 0.25s ease both; }
+@keyframes orderSendingIn { from { opacity: 0; } to { opacity: 1; } }
+.order-sending-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.order-sending-cup {
+  width: 64px;
+  height: 64px;
+  overflow: visible;
+  transform-origin: 50% 100%;
+  animation: cupHop 0.9s ease-in-out infinite;
+}
+.order-sending-cup path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.order-sending-cup .cup { stroke: var(--caramel); }
+.order-sending-cup .steam {
+  stroke: var(--caramel-lt);
+  opacity: 0;
+  animation: steamRise 1.8s ease-in-out infinite;
+}
+.order-sending-cup .s2 { animation-delay: 0.6s; }
+.order-sending-cup .s3 { animation-delay: 1.2s; }
+/* 小跳：往上彈、落地時稍微壓扁 */
+@keyframes cupHop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  15%      { transform: translateY(0) scale(1.06, 0.94); }
+  45%      { transform: translateY(-10px) scale(0.97, 1.03); }
+  70%      { transform: translateY(0) scale(1.04, 0.96); }
+  85%      { transform: translateY(0) scale(1, 1); }
+}
+/* 杯子底下的影子，跳起來時跟著縮小 */
+.order-sending-shadow {
+  width: 40px;
+  height: 5px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--beige);
+  animation: cupShadow 0.9s ease-in-out infinite;
+}
+@keyframes cupShadow {
+  0%, 15%, 70%, 100% { transform: scaleX(1);   opacity: 1; }
+  45%                { transform: scaleX(0.7); opacity: 0.6; }
+}
+.order-sending-text {
+  margin-top: 14px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .order-sending-cup,
+  .order-sending-shadow { animation: none; }
+  .order-sending-cup .steam { animation: none; opacity: 0.6; }
+}
 .cart-item-temp { color: var(--caramel); font-size: 12px; margin-left: 4px; }
 
 .toast {
@@ -1074,6 +1154,12 @@ body::before {
   border-radius: 999px;
   font-size: 13px;
   letter-spacing: 0.04em;
+  white-space: pre-line;   /* 訊息裡的 \n 要換行（例如送單失敗的提示） */
+  text-align: center;
+  /* left:50% 的元素預設最多只能撐到畫面右半邊（約一半寬），長一點的訊息
+     會被擠成好幾行。改成依文字寬度撐開，最寬留左右各 16px。 */
+  width: max-content;
+  max-width: calc(100vw - 32px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -1112,7 +1198,18 @@ body::before {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* 不限高度的話，有圖又有冰熱選項的品項在小手機上會比畫面高，
+     ✕ 和「加入購物車」被切到畫面外又捲不到。
+     限高後由圖片先縮（見 .modal-item-image-wrap）；
+     螢幕矮到連文字都塞不下時，整張卡片可以捲動。
+     32px = .option-modal 上下 padding。 */
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
+.option-header,
+.option-body,
+.option-actions { flex-shrink: 0; }
 .option-header {
   display: flex;
   align-items: center;
@@ -1156,11 +1253,19 @@ body::before {
 }
 .modal-item-image-wrap {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 120px;   /* 縮到底也留一點圖，不要整個不見 */
+  overflow: hidden;
 }
 .modal-item-image {
   display: block;
   width: 100%;
   height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  object-fit: contain;
 }
 .option-body {
   padding: 18px;
@@ -1219,7 +1324,7 @@ body::before {
   border: 1px solid var(--beige);
   border-radius: 8px;
   text-align: center;
-  font-size: 15px;
+  font-size: 16px;   /* 小於 16px 時 iOS Safari 會在聚焦時自動放大整頁 */
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -1344,7 +1449,7 @@ body::before {
   background: var(--white);
   color: var(--ink);
   font-family: 'Noto Serif TC', serif;
-  font-size: 15px;   /* 小於 16px 時 iOS Safari 會在聚焦時自動放大整頁 */
+  font-size: 16px;   /* 小於 16px 時 iOS Safari 會在聚焦時自動放大整頁 */
 }
 .seating-input:focus {
   outline: none;
