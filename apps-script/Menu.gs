@@ -30,7 +30,7 @@
 var MENU_CODE_VERSION = 1;
 
 // 圖片統一放 orderWeb 的 GitHub Pages，兩個站讀到的都是同一份絕對網址。
-// 工作表裡也可以只填檔名（例如 lemon cake-01.jpg），會自動補上這段前綴。
+// 工作表裡也可以只填檔名（例如 lemon cake-01.webp），會自動補上這段前綴。
 // 新增／替換 Banner 或商品圖，只要把檔案放進 orderWeb/src/ 就好，menuWeb 不用再存一份。
 var MENU_IMAGE_BASE = 'https://sandywow.github.io/kigoOrder/src/';
 
@@ -361,14 +361,14 @@ function menuSeedItem(id, name, subtitle, desc, price, imageFile, tag, temp, sol
 // 的欄位內容完全相同，所以合併不會遺失任何內容。
 function menuSeedItems() {
   return [
-    menuSeedItem('ITM-001', '莊園蘋果冰茶', '', '接骨木白花香揉合蘋果茶韻\n搭配特製果汁冰塊\n冰塊融化後風味更飽滿，微甜不膩 🌿.ᐟ.ᐟ', 150, 'apple iced tea PICTURE-05.jpg', '🍎新品嚐鮮🍎', 'iced', false),
-    menuSeedItem('ITM-002', '享・ 阿芙加朵', 'ESPRESSO AFFOGATO', '寫給盛夏的冰與火之歌：\n\n讓熱咖啡\n緩緩落進冰淇淋\n\n把最後一刻\n留給最剛好的相遇', 150, 'AFFOGATO PICTURE-04.jpg', '新品嚐鮮.ᐟ.ᐟ', '', false),
-    menuSeedItem('ITM-003', '潮汐花事', '鮪魚．鮭魚卵．薯泥．蛋．沙拉', '生活的起落，一如潮汐往返\n在海洋與薯泥的包容中，找回自己的節奏', 100, 'FISH PICTURE-03.jpg', '', '', false),
-    menuSeedItem('ITM-004', '浮生花事', '薯泥．蛋．沙拉', '一天的忙碌過後，來口清爽無負擔的薯泥\n卸下防備，偷得浮生半日閒', 80, 'POTATO PICTURE-02.jpg', '蛋奶素', '', false),
+    menuSeedItem('ITM-001', '莊園蘋果冰茶', '', '接骨木白花香揉合蘋果茶韻\n搭配特製果汁冰塊\n冰塊融化後風味更飽滿，微甜不膩 🌿.ᐟ.ᐟ', 150, 'apple iced tea PICTURE-05.webp', '🍎新品嚐鮮🍎', 'iced', false),
+    menuSeedItem('ITM-002', '享・ 阿芙加朵', 'ESPRESSO AFFOGATO', '寫給盛夏的冰與火之歌：\n\n讓熱咖啡\n緩緩落進冰淇淋\n\n把最後一刻\n留給最剛好的相遇', 150, 'AFFOGATO PICTURE-04.webp', '新品嚐鮮.ᐟ.ᐟ', '', false),
+    menuSeedItem('ITM-003', '潮汐花事', '鮪魚．鮭魚卵．薯泥．蛋．沙拉', '生活的起落，一如潮汐往返\n在海洋與薯泥的包容中，找回自己的節奏', 100, 'FISH PICTURE-03.webp', '', '', false),
+    menuSeedItem('ITM-004', '浮生花事', '薯泥．蛋．沙拉', '一天的忙碌過後，來口清爽無負擔的薯泥\n卸下防備，偷得浮生半日閒', 80, 'POTATO PICTURE-02.webp', '蛋奶素', '', false),
 
     menuSeedItem('ITM-005', '香橙巴斯克蛋糕', '', '綿密乳酪融入橙香果蜜\n清爽不膩，每一口都是乳酪控的天堂', 80, '', '', '', true),
     menuSeedItem('ITM-006', '莓果巴斯克蛋糕', '', '酸度喚醒味覺，甜味輕輕把你抱住\n酸甜交織，這就是莓果的專屬小悸動吧！', 100, '', '', '', false),
-    menuSeedItem('ITM-007', '午後檸檬', '青檸磅蛋糕', '微酸剛好', 60, 'lemon cake-01.jpg', '', '', false),
+    menuSeedItem('ITM-007', '午後檸檬', '青檸磅蛋糕', '微酸剛好', 60, 'lemon cake-01.webp', '', '', false),
     menuSeedItem('ITM-008', '布朗尼想怎樣', '', '是雙層布朗尼！\n我都兩種口感讓尼一次滿足了\n尼還想怎樣啦(…>_<…)', 120, '', '', '', true),
     menuSeedItem('ITM-009', '淡烏龍芝士蛋糕', '', '輕盈茶香，回甘柔和\n適合想慢下來的時候～', 180, '', '', '', true),
     menuSeedItem('ITM-010', '重烏龍芝士蛋糕', '', '像山風一樣，茶香迎面而來\n茶韻厚實，濃中帶清\n喜歡茶的你一定要試試！', 160, '', '', '', true),
@@ -495,10 +495,10 @@ function menuSeedSettings() {
 // 欄位順序：id, image, alt, sortOrder, active, site
 function menuSeedBanners() {
   return [
-    ['BNR-001', menuSeedImage('BANNER apple iced tea-05.jpg'), '莊園蘋果冰茶', 10, true, 'both'],
-    ['BNR-002', menuSeedImage('BANNER AFFOGATO-04.jpg'),       '享・阿芙加朵', 20, true, 'both'],
-    ['BNR-004', menuSeedImage('BANNER FISH-03.jpg'),           '潮汐花事',     30, false, 'orderWeb'],
-    ['BNR-005', menuSeedImage('BANNER POTATO-02.jpg'),         '浮生花事',     40, false, 'orderWeb']
+    ['BNR-001', menuSeedImage('BANNER apple iced tea-05.webp'), '莊園蘋果冰茶', 10, true, 'both'],
+    ['BNR-002', menuSeedImage('BANNER AFFOGATO-04.webp'),       '享・阿芙加朵', 20, true, 'both'],
+    ['BNR-004', menuSeedImage('BANNER FISH-03.webp'),           '潮汐花事',     30, false, 'orderWeb'],
+    ['BNR-005', menuSeedImage('BANNER POTATO-02.webp'),         '浮生花事',     40, false, 'orderWeb']
   ];
 }
 
