@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 6;   // v6: 訂單管理（list / update* / delete / clearToday / 後台補登）需要 token
+var CODE_VERSION = 7;   // v7: 訂單清單用 CacheService 快取 20 秒，寫入時作廢（v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -124,33 +124,101 @@ function doPost(e) {
       if (denied) return jsonResponse(denied);
     }
 
-    if (payload.action === 'updateStatus') {
-      return handleUpdateStatus(payload);
-    }
-    if (payload.action === 'updatePayment') {
-      return handleUpdatePayment(payload);
-    }
-    if (payload.action === 'updateOrder') {
-      return handleUpdateOrder(payload);
-    }
-    if (payload.action === 'deleteOrder') {
-      return handleDeleteOrder(payload);
-    }
-    if (payload.action === 'clearToday') {
-      return handleClearToday(payload);
-    }
     // 菜單寫入 — 實作在 MenuWrite.gs。
-    // ⚠ 這一行必須留在下面的 fallback 之前：fallback 不是「沒有 action」才觸發，
+    // ⚠ 這一行必須留在 routeOrderWrite 之前：那裡的 fallback 不是「沒有 action」才觸發，
     //   而是「前面每一個 action 都沒命中」就觸發，所以晚一步就會把菜單資料
     //   交給 handleCreateOrder 寫進 Orders。
     if (payload.action === 'saveMenu') {
       return handleSaveMenu(payload);
     }
-    // 沒有 action（前台與後台送出的訂單都是這種）→ 建立訂單
-    return handleCreateOrder(payload);
+
+    try {
+      return routeOrderWrite(payload);
+    } finally {
+      // 寫完（不管成功失敗）就讓訂單清單的快取全部失效。
+      // 一定要在寫入「之後」：先作廢的話，同一時間的讀取可能把舊資料又存回新一代的快取。
+      bumpOrdersCacheGeneration();
+    }
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
   }
+}
+
+function routeOrderWrite(payload) {
+  if (payload.action === 'updateStatus') {
+    return handleUpdateStatus(payload);
+  }
+  if (payload.action === 'updatePayment') {
+    return handleUpdatePayment(payload);
+  }
+  if (payload.action === 'updateOrder') {
+    return handleUpdateOrder(payload);
+  }
+  if (payload.action === 'deleteOrder') {
+    return handleDeleteOrder(payload);
+  }
+  if (payload.action === 'clearToday') {
+    return handleClearToday(payload);
+  }
+  // 沒有 action（前台與後台送出的訂單都是這種）→ 建立訂單
+  return handleCreateOrder(payload);
+}
+
+/* ═════════════════════════════
+   訂單清單快取
+
+   後台每 4 秒輪詢一次，每次都把 Orders 整欄 receivedAt 讀一遍很慢。
+   讀到的清單用 CacheService 存 ORDERS_CACHE_SECONDS 秒，所有裝置共用。
+
+   作廢方式是「世代號」：快取 key 帶著目前的世代號，任何經過 doPost 的寫入
+   完成後就換一個新的世代號，舊的 key 再也不會被讀到（時間到自己消失）。
+   ⚠ 直接在試算表上手動改的資料不會作廢快取，最多 ORDERS_CACHE_SECONDS 秒後才看得到。
+   ═════════════════════════════ */
+var ORDERS_CACHE_SECONDS = 20;
+var ORDERS_CACHE_GEN_KEY = 'orders:gen';
+
+function ordersCacheGeneration(cache) {
+  var gen = cache.get(ORDERS_CACHE_GEN_KEY);
+  if (!gen) {
+    // 被清掉或第一次：發一個新的。舊世代的 key 一樣不會再被讀到，只是少了一次命中
+    gen = String(Date.now());
+    cache.put(ORDERS_CACHE_GEN_KEY, gen, 21600);   // 世代號本身存最久（6 小時）
+  }
+  return gen;
+}
+
+function bumpOrdersCacheGeneration() {
+  try {
+    CacheService.getScriptCache().put(ORDERS_CACHE_GEN_KEY, String(Date.now()) + Math.random(), 21600);
+  } catch (err) {
+    // 快取服務出問題不能擋住寫入的回應；最壞就是清單晚 ORDERS_CACHE_SECONDS 秒更新
+  }
+}
+
+// 先查快取，沒有才讀試算表。快取服務本身出錯時直接讀試算表，不影響結果。
+function listOrdersCached(scope, dateStr) {
+  var cache = null, key = null;
+  try {
+    cache = CacheService.getScriptCache();
+    // 「今天」「本月」的範圍會隨日期改變，key 要帶上實際日期，過了午夜才不會拿到昨天的
+    var now = new Date();
+    key = 'orders:' + ordersCacheGeneration(cache) + ':' + (scope || 'all') + ':' +
+      (scope === 'date' ? String(dateStr || '') : dateKey(now));
+    var hit = cache.get(key);
+    if (hit) return JSON.parse(hit);
+  } catch (err) {
+    cache = null;
+  }
+
+  var orders = listOrders(scope, dateStr);
+
+  if (cache && key) {
+    try {
+      // 單一個值上限 100KB，「全部」「本月」可能超過 —— 放不下就不快取，照樣回傳
+      cache.put(key, JSON.stringify(orders), ORDERS_CACHE_SECONDS);
+    } catch (err) {}
+  }
+  return orders;
 }
 
 function doGet(e) {
@@ -162,7 +230,7 @@ function doGet(e) {
       if (denied) return jsonResponse(denied);
       return jsonResponse({
         ok: true,
-        orders: listOrders(params.scope, params.date)
+        orders: listOrdersCached(params.scope, params.date)
       });
     }
     // 共同菜單資料 — 實作在 Menu.gs

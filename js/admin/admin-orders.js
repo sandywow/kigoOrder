@@ -41,7 +41,63 @@ function noteOrderAuthFailure(data) {
   if (!data || (data.error !== 'unauthorized' && data.error !== 'token not configured')) return false;
   orderAuthProblem = data.error;
   if (data.error === 'unauthorized') clearMenuWriteToken();   // 存著的那份沒用了，下次重問
+  clearOrderCache();   // 沒通過驗證就不該再顯示存著的訂單
   return true;
+}
+
+/* ── 訂單的本機快取 ──
+   Apps Script 一次要 1~3 秒，閒置後第一次甚至 8 秒以上。開頁、切分頁時
+   畫面一直空白很難受，所以每次讀成功就把結果存在這台裝置，
+   下次先畫上次那份、背景拿到新的再換掉。
+   ⚠ 只拿來「先顯示」：寫入、probeOrder 的確認一律以伺服器回應為準。
+   key 帶日期：昨天存的「今日訂單」今天不會被拿出來。 */
+const ORDER_CACHE_KEY = 'kigoAdminOrdersCache';
+const ORDER_CACHE_MAX_ENTRIES = 6;            // 今日 + 統計的幾種範圍就夠了
+const ORDER_CACHE_MAX_CHARS = 1500000;        // 「全部」可能很大，太大就不存，免得把 localStorage 塞滿
+
+function localDateKey(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function orderCacheSlot(scope, date) {
+  const today = localDateKey(new Date());
+  if (scope === 'today') return 'today|' + today;
+  if (scope === 'month') return 'month|' + today.slice(0, 7);
+  if (scope === 'date') return 'date|' + (date || '');
+  return 'all|' + today;   // 「全部」也一天換一份，不要拿很久以前的總數出來
+}
+
+function readOrderCacheAll() {
+  try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY)) || {}; } catch (e) { return {}; }
+}
+
+function readOrderCache(scope, date) {
+  if (!menuWriteTokenValue()) return null;   // 沒有 token 的裝置不顯示存著的訂單
+  const entry = readOrderCacheAll()[orderCacheSlot(scope, date)];
+  return entry && Array.isArray(entry.orders) ? entry.orders : null;
+}
+
+function writeOrderCache(scope, date, orders) {
+  try {
+    const all = readOrderCacheAll();
+    all[orderCacheSlot(scope, date)] = { savedAt: Date.now(), orders };
+    // 只留最近用過的幾份
+    const slots = Object.keys(all).sort((a, b) => (all[b].savedAt || 0) - (all[a].savedAt || 0));
+    slots.slice(ORDER_CACHE_MAX_ENTRIES).forEach(k => { delete all[k]; });
+    const json = JSON.stringify(all);
+    if (json.length > ORDER_CACHE_MAX_CHARS) return;
+    localStorage.setItem(ORDER_CACHE_KEY, json);
+  } catch (e) { /* 存不了就算了，只是少了先顯示 */ }
+}
+
+function clearOrderCache() {
+  try { localStorage.removeItem(ORDER_CACHE_KEY); } catch (e) {}
+}
+
+// 先畫快取時加在畫面最上面的小提示；拿到新資料重畫時就會被蓋掉
+function orderCacheNoteHtml(text) {
+  return `<div class="order-cache-note">${text || '顯示上次的資料，正在更新…'}</div>`;
 }
 
 // 訂單畫面上「輸入後台 Token」按鈕
@@ -72,6 +128,7 @@ async function apiGetOrders(scope, date) {
     if (noteOrderAuthFailure(data)) return null;
     if (data && data.ok && Array.isArray(data.orders)) {
       orderAuthProblem = null;
+      writeOrderCache(scope, date, data.orders);
       return data.orders;
     }
     return null;
@@ -277,6 +334,8 @@ function paintTodayOrders() {
 // 所以同一時間只允許一個查詢在跑，還沒回來就跳過這一輪。
 let todayFetchInFlight = false;
 let consecutiveFetchFailures = 0;
+let todayCacheTried = false;     // 本機快取只在開頁後第一次讀取前畫一次
+let todayShowingCache = false;   // 畫面上現在是不是快取（還沒拿到伺服器的新資料）
 
 async function refreshTodayOrders() {
   const wrap = document.getElementById('today-orders');
@@ -288,6 +347,19 @@ async function refreshTodayOrders() {
   }
   // 有寫入正在進行時先不輪詢，把連線讓給店家的操作，也避免抓到寫到一半的資料
   if (todayFetchInFlight || activeWrites > 0) return;
+
+  // 開頁後第一次：先畫這台裝置上次存的那份，不要讓畫面空白好幾秒。
+  // 只試一次 —— 之後清空今日訂單等情況把畫面清掉時，不能又把舊資料畫回來。
+  if (!todayCacheTried) {
+    todayCacheTried = true;
+    const cached = readOrderCache('today');
+    if (cached && !todayOrders.length) {
+      todayOrders = applyPendingOps(cached);
+      paintTodayOrders();
+      wrap.insertAdjacentHTML('afterbegin', orderCacheNoteHtml());
+      todayShowingCache = true;
+    }
+  }
 
   todayFetchInFlight = true;
   let orders;
@@ -302,6 +374,7 @@ async function refreshTodayOrders() {
     if (orderAuthProblem) {
       todayOrders = [];
       todayOrdersSignature = '';
+      todayShowingCache = false;
       wrap.innerHTML = `<div class="order-hint">${ORDER_AUTH_MESSAGES[orderAuthProblem]}` +
         (orderAuthProblem === 'token not configured' ? '' :
           '<br><button type="button" class="btn-order" onclick="enterOrderToken()">輸入後台 Token</button>') +
@@ -309,12 +382,17 @@ async function refreshTodayOrders() {
       return;
     }
     consecutiveFetchFailures++;
-    if (!todayOrders.length) {
+    if (todayShowingCache) {
+      // 畫面上是快取，講清楚那不是最新的，免得店家以為沒有新單
+      const note = wrap.querySelector('.order-cache-note');
+      if (note) note.textContent = `連線不穩，顯示的是上次的資料（第 ${consecutiveFetchFailures} 次重試中…）`;
+    } else if (!todayOrders.length) {
       wrap.innerHTML = `<div class="order-hint">讀取訂單失敗（第 ${consecutiveFetchFailures} 次），持續重試中…<br>若一直沒有恢復，請確認 Apps Script 已重新部署為最新版本。</div>`;
     }
     return;
   }
   consecutiveFetchFailures = 0;
+  todayShowingCache = false;
 
   // 伺服器內容沒變就不重繪，避免每 4 秒閃一次畫面
   const signature = JSON.stringify(orders);

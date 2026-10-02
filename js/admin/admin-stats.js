@@ -84,14 +84,30 @@ async function renderSalesStats() {
   const dateValue = document.getElementById('stats-date').value;
   if (statsScope === 'date' && !dateValue) return;
 
+  const scopeDate = statsScope === 'date' ? dateValue : null;
+
+  // 先用這台裝置上次存的同一個範圍畫出來，背景再更新（快取說明見 admin-orders.js）
+  const cached = readOrderCache(statsScope, scopeDate);
+  if (cached) {
+    statsOrders = cached;
+    paintSalesStats();
+    document.getElementById('stat-items').insertAdjacentHTML('afterbegin', orderCacheNoteHtml());
+  }
+
   statsFetchInFlight = true;
   let orders;
   try {
-    orders = await apiGetOrders(statsScope, statsScope === 'date' ? dateValue : null);
+    orders = await apiGetOrders(statsScope, scopeDate);
   } finally {
     statsFetchInFlight = false;
   }
   if (!orders) {
+    if (cached && !orderAuthProblem) {
+      // 留著上次的數字，但要講清楚不是最新的
+      const note = document.querySelector('#stat-items .order-cache-note');
+      if (note) note.textContent = '連線不穩，顯示的是上次的資料，請稍後再試';
+      return;
+    }
     document.getElementById('stat-items').innerHTML =
       '<div class="history-empty">' +
       (orderAuthProblem ? ORDER_AUTH_MESSAGES[orderAuthProblem] : '讀取統計資料失敗，請稍後再試。') +
