@@ -318,9 +318,27 @@ function applyMenuRaw(raw) {
 // 欄位名沿用後台既有的（name / nameJp / desc / price / tag / image / temp / soldOut），
 // admin-menu.js 因此完全不用改。id 與原始列的對照資訊掛在後面 ——
 // 現有 UI 不會顯示它們，匯出 config.js 也不會帶到（renderItem 只挑固定幾個 key）。
+// Items 的 price 欄 → 數字；留白、不是數字、負數都是 null（＝沒有價格，前台不開放點）。
+// 判斷要跟 Menu.gs 的 menuPriceNumber 一致。
+// ⚠ 不能直接 Number(price)：Number('') 是 0，留白的價格會變成 NT$0，存回去就成了 0 元可點。
+function sheetPriceNumber(value) {
+  var raw = String(value == null ? '' : value).trim();
+  if (raw === '') return null;
+  var n = Number(raw);
+  return (isNaN(n) || n < 0) ? null : n;
+}
+
+// 後台「價格」欄顯示的文字：有 priceText 就顯示它，沒有才用數字組 NT$xxx。
+// patchItemRow 也用這支判斷「價格欄有沒有被改過」，兩邊一定要同一套。
+function displayPriceOf(itemRow) {
+  var priceText = sheetText(itemRow.priceText);
+  if (priceText) return priceText;
+  var n = sheetPriceNumber(itemRow.price);
+  return n === null ? null : 'NT$' + n;
+}
+
 function displayItem(itemRow, linkRow) {
-  var priceNumber = Number(itemRow.price);
-  if (isNaN(priceNumber)) priceNumber = null;
+  var priceNumber = sheetPriceNumber(itemRow.price);
   var priceText = sheetText(itemRow.priceText);
 
   return {
@@ -329,7 +347,7 @@ function displayItem(itemRow, linkRow) {
     nameJp:  sheetText(itemRow.subtitle),
     desc:    sheetText(itemRow.desc),
     // 後台的價格欄是純文字，對應 Items 的 price(數字) + priceText 兩欄
-    price:   priceText || (priceNumber === null ? null : 'NT$' + priceNumber),
+    price:   displayPriceOf(itemRow),
     tag:     sheetText(itemRow.tag),
     // 跟海報一樣換算成後台慣用的「src/檔名」（見 imageDisplayPath）
     image:   sheetText(imageDisplayPath(itemRow.image)),
@@ -565,7 +583,7 @@ function pushMenuToSheets() {
       console.log('[admin] 新商品取得 id：' + built.newIds.join('、'));
     }
 
-    apiSaveMenu(endpoint, token, built.tables);
+    apiSaveMenu(endpoint, token, built.tables, built.unorderable);
   } catch (err) {
     // 最後一道：絕對不讓例外往上丟回 saveConfig()
     console.error('[admin] pushMenuToSheets 發生例外', err);
@@ -575,7 +593,8 @@ function pushMenuToSheets() {
 
 // 跟 apiPostOrder 一樣用 text/plain：Apps Script 沒有處理 CORS 預檢(OPTIONS)，
 // 用 application/json 會觸發預檢而直接失敗。
-function apiSaveMenu(endpoint, token, tables) {
+// unorderable：這次改成沒有數字價格的品項名稱，存好之後跟結果一起提示
+function apiSaveMenu(endpoint, token, tables, unorderable) {
   if (typeof fetch !== 'function') {
     showToast('這個瀏覽器不支援同步到 Sheets');
     return;
@@ -593,14 +612,14 @@ function apiSaveMenu(endpoint, token, tables) {
     body: JSON.stringify(body)
   })
     .then(function (res) { return res.json(); })
-    .then(function (data) { reportSaveMenuResult(data); })
+    .then(function (data) { reportSaveMenuResult(data, unorderable); })
     .catch(function (err) {
       console.error('[admin] saveMenu 失敗', err);
       showToast('菜單同步失敗，詳見 Console');
     });
 }
 
-function reportSaveMenuResult(data) {
+function reportSaveMenuResult(data, unorderableItems) {
   if (!data || typeof data !== 'object') {
     console.error('[admin] saveMenu 回應格式不對', data);
     showToast('菜單同步失敗：回應格式不對');
@@ -645,17 +664,21 @@ function reportSaveMenuResult(data) {
   var counts = '更新 ' + sum.updated + '／新增 ' + sum.added + '／刪除 ' + sum.deleted +
     (sum.skipped ? '／略過 ' + sum.skipped : '');
 
+  // 這次改成沒有數字價格的品項：前台不會開放點，存好之後一併提醒
+  var unorderable = (unorderableItems && unorderableItems.length)
+    ? '\n（' + unorderableItems.join('、') + ' 沒有數字價格，前台不開放點）' : '';
+
   // GAS 端的 MENU_WRITE_ENABLED 還是 false 時只會算計畫、不寫任何 cell
-  showToast(data.dryRun
+  showToast((data.dryRun
     ? '菜單已送出（GAS 目前是預演模式，未實際寫入）：' + counts
-    : '菜單已寫入 Sheets：' + counts);
+    : '菜單已寫入 Sheets：' + counts) + unorderable);
 }
 
 
 /* ── 組 payload ── */
 
 function buildMenuTablesFromState() {
-  var out = { tables: {}, errors: [], warnings: [], newIds: [] };
+  var out = { tables: {}, errors: [], warnings: [], newIds: [], unorderable: [] };
   var raw = state.raw;
 
   var items = buildItemsTable(raw, out);
@@ -723,6 +746,18 @@ function buildItemsTable(raw, out) {
     order.push(id);
   });
 
+  // 畫面上已經有 id 的品項先全部登記起來，發新 id 時要避開。
+  // 只看 raw 和「這一輪已經掃過的」不夠：上一次儲存剛發出去的 id 不在 raw 裡
+  // （要重新整理才會更新），如果它排在後面的分類還沒掃到，就會被重複發給新品項，
+  // 兩個品項共用一個 id，其中一個就消失了。
+  var reserved = {};
+  Object.keys(state.menuData || {}).forEach(function (catKey) {
+    (state.menuData[catKey] || []).forEach(function (item) {
+      var id = sheetText(item.id);
+      if (id) reserved[id] = true;
+    });
+  });
+
   Object.keys(state.menuData || {}).forEach(function (catKey) {
     (state.menuData[catKey] || []).forEach(function (item) {
       var id = sheetText(item.id);
@@ -730,7 +765,8 @@ function buildItemsTable(raw, out) {
       // 「＋ 新增品項」加出來的沒有 id。發一個新的並寫回 state，
       // 下一次儲存才會認得它是同一筆、而不是再新增一個。
       if (!id) {
-        id = nextItemId(byId);
+        id = nextItemId(byId, reserved);
+        reserved[id] = true;
         item.id      = id;
         byId[id]     = newItemRow(headers, id);
         original[id] = null;
@@ -752,6 +788,14 @@ function buildItemsTable(raw, out) {
       }
 
       var patched = patchItemRow(byId[id], item);
+
+      // 價格改成拆不出數字的文字（例如「時價」）、清空，或新品項沒填價格 → 前台不會開放點，提醒一下。
+      // 原本就沒價格、這次也沒動的品項不提醒（那是店家刻意的）。
+      var priceTouched = !original[id] || sheetText(item.price) !== displayPriceOf(byId[id]);
+      if (patched.price === '' && priceTouched &&
+          out.unorderable.indexOf(sheetText(item.name) || id) === -1) {
+        out.unorderable.push(sheetText(item.name) || id);
+      }
 
       // 同一個商品掛在多個分類時，畫面上是各自獨立的多份 copy，
       // 改了其中一份不會同步到另一份。所以只讓「真的被改過的那一份」勝出，
@@ -782,13 +826,18 @@ function newItemRow(headers, id) {
 // 後台編輯得到的欄位才覆寫，其他欄位保留 raw 原值
 function patchItemRow(row, item) {
   var next  = deepClone(row);
-  var price = splitPrice(item.price);
 
   next.name      = ve(item.name);
   next.subtitle  = ve(item.nameJp);     // 後台叫 nameJp，試算表的欄位是 subtitle
   next.desc      = ve(item.desc);
-  next.price     = price.number;
-  next.priceText = price.text;
+  // 價格欄沒被改過 → price / priceText 原封不動送回去。
+  // 一個文字欄拆回兩欄一定會失真（留白變 0、「NT$1,200」拆不出數字被清空），
+  // 所以只有店家真的改了價格才拆。
+  if (sheetText(item.price) !== displayPriceOf(row)) {
+    var price = splitPrice(item.price);
+    next.price     = price.number;
+    next.priceText = price.text;
+  }
   // 後台欄位是「src/檔名」，儲存格只放檔名（imageBase 已經以 src/ 結尾）
   next.image     = ve(imageSheetPath(item.image));
   next.tag       = ve(item.tag);
@@ -797,15 +846,22 @@ function patchItemRow(row, item) {
   return next;
 }
 
-// 後台的價格是一個純文字欄（displayItem 是 priceText || 'NT$' + price 組出來的），
-// 寫回去要拆成 price(數字) + priceText(文字) 兩欄。
-// 「NT$150」「150」→ price=150；「時價」「兩杯 NT$180」→ 整串放 priceText。
+// 後台的價格是一個純文字欄（displayPriceOf 組出來的），改過才拆回 price(數字) + priceText(文字)。
+// 規則跟前台 menu.js 的 itemUnitPrice 一樣，兩邊認定的單價才會一致：
+//   「NT$150」「150」 → price=150，priceText 留白（前台自己組 NT$150）
+//   「NT$1,200」      → price=1200，priceText=「NT$1,200」（保留千分位的寫法）
+//   「2入 NT$180」    → price=180，priceText=整串
+//   「時價」、留白     → price 留白 ＝ 前台不開放點（buildItemsTable 會提醒）
 function splitPrice(display) {
   var s = String(display == null ? '' : display).trim();
   if (s === '') return { number: '', text: '' };
 
-  var m = s.match(/^NT\$\s*(\d+(?:\.\d+)?)$/i) || s.match(/^(\d+(?:\.\d+)?)$/);
-  if (m) return { number: Number(m[1]), text: '' };
+  var plain = s.replace(/,/g, '');
+  var m = plain.match(/^NT\$\s*(\d+(?:\.\d+)?)$/i) || plain.match(/^(\d+(?:\.\d+)?)$/);
+  if (m) return { number: Number(m[1]), text: plain === s ? '' : s };
+
+  var inText = plain.match(/NT\$\s*(\d+(?:\.\d+)?)/i);
+  if (inText) return { number: Number(inText[1]), text: s };
 
   return { number: '', text: s };
 }
@@ -827,9 +883,10 @@ function sameRow(headers, a, b) {
 }
 
 // 新商品的 id。沿用試算表現有的 ITM-000 命名，並確認沒有撞號。
-function nextItemId(byId) {
+function nextItemId(byId, reserved) {
+  reserved = reserved || {};
   var max = 0;
-  Object.keys(byId).forEach(function (id) {
+  Object.keys(byId).concat(Object.keys(reserved)).forEach(function (id) {
     var m = String(id).match(/^ITM-(\d+)$/i);
     if (m) {
       var n = parseInt(m[1], 10);
@@ -841,7 +898,7 @@ function nextItemId(byId) {
   do {
     max++;
     id = 'ITM-' + String(max + 1000).substring(1);   // 001 / 024 / 137
-  } while (byId[id] || !MENU_PUSH_ID_RE.test(id));
+  } while (byId[id] || reserved[id] || !MENU_PUSH_ID_RE.test(id));
 
   return id;
 }

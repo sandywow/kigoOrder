@@ -31,7 +31,8 @@ function renderMenuEditor(catKey) {
   addBtn.textContent = '＋ 新增品項';
   addBtn.onclick = () => {
     if (!state.menuData[catKey]) state.menuData[catKey] = [];
-    state.menuData[catKey].push({ name: '新品項', nameJp: null, desc: null, price: 'NT$0', tag: null, image: null, emoji: null });
+    // 價格預設留白：留白＝前台不開放點。以前預設 NT$0，忘了改就變成 0 元可以點
+    state.menuData[catKey].push({ name: '新品項', nameJp: null, desc: null, price: null, tag: null, image: null, emoji: null });
     renderMenuEditor(catKey);
   };
   wrap.appendChild(addBtn);
