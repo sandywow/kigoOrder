@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 7;   // v7: 訂單清單用 CacheService 快取 20 秒，寫入時作廢（v6: 訂單管理需要 token）
+var CODE_VERSION = 8;   // v8: 客人送單的單價改用 Items 工作表核對（v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -129,7 +129,11 @@ function doPost(e) {
     //   而是「前面每一個 action 都沒命中」就觸發，所以晚一步就會把菜單資料
     //   交給 handleCreateOrder 寫進 Orders。
     if (payload.action === 'saveMenu') {
-      return handleSaveMenu(payload);
+      try {
+        return handleSaveMenu(payload);
+      } finally {
+        clearMenuPriceCache();   // 價格可能改了，送單核對要用新的
+      }
     }
 
     try {
@@ -258,6 +262,10 @@ function handleCreateOrder(payload) {
   var items = normalizeItems(Array.isArray(payload.items) ? payload.items : []);
   if (!items.length) throw new Error('order has no items');
 
+  // 客人送的單：單價一律改用 Items 工作表的價格，不相信前端送來的數字。
+  // 後台補登是店家自己填的金額（可能打折、可能是舊價），照原樣保留。
+  var unverified = payload.manual ? [] : priceCustomerItems(items);
+
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -289,18 +297,83 @@ function handleCreateOrder(payload) {
       // 客人原始點的內容，之後店家修改訂單時這欄不會被動到，方便日後查詢對照。
       originalItems: JSON.stringify(items),
       updatedAt: '',
-      // 後台手動補登的訂單標記一下，日後對帳才分得出來不是客人自己點的
+      // 後台手動補登的訂單標記一下，日後對帳才分得出來不是客人自己點的。
+      // 客人的單裡有品項在 Items 找不到（改名、下架）時，單價只能沿用前端的，也記一筆讓店家核對。
       changeLog: payload.manual
         ? Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MM/dd HH:mm') + ' 後台補登'
-        : ''
+        : (unverified.length ? '⚠ 單價未經菜單核對：' + unverified.join('、') : '')
     };
 
     var rows = items.map(function (item) { return buildItemRow(ctx, item); });
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, SHEET_HEADERS.length).setValues(rows);
-    return jsonResponse({ ok: true, orderId: ctx.orderId, total: ctx.orderTotal });
+    return jsonResponse({
+      ok: true, orderId: ctx.orderId, total: ctx.orderTotal,
+      // 伺服器實際採用的單價，前台收據照這份顯示
+      items: items.map(function (item) {
+        return { name: item.name, temp: item.temp, quantity: item.quantity, unitPrice: item.unitPrice };
+      })
+    });
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ── 客人送單的單價核對 ──
+   用品項 id 找 Items 工作表的價格（舊快取或 config.js 的品項沒有 id 時改用品名）。
+   找到 → 用試算表的價格；找到但沒有價格 → 整張單拒收（這種品項前台本來就點不了）；
+   找不到 → 沿用前端單價並回傳品名，由呼叫端記進 changeLog。
+   價格表快取 MENU_PRICE_CACHE_SECONDS 秒；經過 saveMenu 會立刻作廢，
+   直接在試算表改價格則最多晚這麼久才生效。 */
+var MENU_PRICE_CACHE_KEY = 'menu:prices';
+var MENU_PRICE_CACHE_SECONDS = 60;
+
+function priceCustomerItems(items) {
+  var index = menuPriceIndex();
+  var unverified = [];
+  items.forEach(function (item) {
+    var hit = (item.id && index.byId.hasOwnProperty(item.id)) ? index.byId[item.id]
+      : (index.byName.hasOwnProperty(item.name) ? index.byName[item.name] : undefined);
+    if (hit === undefined || hit === 'duplicate') {
+      unverified.push(itemLabel(item));
+      return;
+    }
+    if (hit === null) throw new Error('item has no price: ' + item.name);
+    item.unitPrice = hit;
+  });
+  return unverified;
+}
+
+function menuPriceIndex() {
+  var cache = null;
+  try {
+    cache = CacheService.getScriptCache();
+    var hit = cache.get(MENU_PRICE_CACHE_KEY);
+    if (hit) return JSON.parse(hit);
+  } catch (err) {
+    cache = null;
+  }
+
+  var index = { byId: {}, byName: {} };
+  menuReadSheet(MENU_SHEET_ITEMS, MENU_ITEMS_HEADERS).forEach(function (row) {
+    var id = String(row.id == null ? '' : row.id).trim();
+    if (!id || !menuToBool(row.active)) return;
+    var price = menuPriceNumber(row.price);
+    index.byId[id] = price;
+    var name = String(row.name == null ? '' : row.name).trim();
+    if (!name) return;
+    // 同名的品項（例如冰熱分兩列、價格不同）沒辦法只靠品名判斷，標記起來改走「未核對」
+    index.byName[name] = index.byName.hasOwnProperty(name) && index.byName[name] !== price
+      ? 'duplicate' : price;
+  });
+
+  if (cache) {
+    try { cache.put(MENU_PRICE_CACHE_KEY, JSON.stringify(index), MENU_PRICE_CACHE_SECONDS); } catch (err) {}
+  }
+  return index;
+}
+
+function clearMenuPriceCache() {
+  try { CacheService.getScriptCache().remove(MENU_PRICE_CACHE_KEY); } catch (err) {}
 }
 
 // 找出「該日期」已經用到的最大流水號 +1。必須在 LockService 的鎖裡呼叫才安全。
@@ -562,6 +635,8 @@ function normalizeItems(items) {
     if (freeQty < 0) freeQty = 0;
     if (freeQty > quantity) freeQty = quantity;   // 招待數量不得超過售出數量
     return {
+      // 菜單品項 id，只在送單核對單價時用（priceCustomerItems），不寫進試算表
+      id: item.id ? String(item.id).trim() : '',
       name: String(item.name || ''),
       category: String(item.category || ''),
       temp: item.temp || '',

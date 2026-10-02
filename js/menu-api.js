@@ -12,8 +12,9 @@
    ⚠ 為什麼要擋著不即時重畫：
    購物車存的是 { cat, idx } —— 分類名稱 + 陣列索引。菜單資料一換，
    索引就會指到別的商品，客人送出的單就錯了。所以只有在
-   「購物車是空的」而且「客人還在首頁」時才會真的重畫；
-   其他時候只把新資料存進快取，下次載入頁面才生效。
+   「購物車是空的」而且「加入購物車的視窗沒開著」時才會真的套用
+   （首頁、菜單頁都可以，見 safeToApplyNow）；
+   其他時候先擱著，購物車一清空就補套。
    ═══════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -160,10 +161,17 @@
     // 正常不會讀不到，但萬一讀不到就當作「不安全」，寧可不動資料。
     try {
       if (cart && cart.length) return false;
+      // 加入購物車的視窗開著時，它記著 { cat, idx }，資料一換按確認就會加錯品項
+      if (pendingCartSelection) return false;
     } catch (e) {
       return false;
     }
-    return onLanding();
+    // 在菜單頁也可以套：購物車是空的就沒有索引會指錯。
+    // 以前只在首頁套，先進菜單的客人（尤其沒有快取的第一次來客）整段點餐都停在 config.js 的舊菜單。
+    // 成功頁還是不套 —— 等客人按「返回菜單」（menu.js 的 backToMenuFromSuccess 會叫 flushPending）。
+    var successPage = document.getElementById('order-success-page');
+    if (successPage && successPage.classList.contains('visible')) return false;
+    return true;
   }
 
   function onLanding() {
@@ -177,8 +185,13 @@
   }
 
   function repaint() {
-    bannerDirty = false;
+    var activeTab = document.querySelector('.tab-btn.active');
+    var prevKey = activeTab ? activeTab.getAttribute('data-key') : null;
     if (typeof initLanding === 'function') initLanding();
+    // 首頁隱藏時畫的海報高度是 0（用容器寬度算的），回到首頁要再畫一次
+    bannerDirty = !onLanding();
+    // 客人在菜單頁的話，目前看的分類也要換成新資料
+    if (typeof rerenderMenuPage === 'function') rerenderMenuPage(prevKey);
   }
 
   function whenReady(fn) {
@@ -299,6 +312,8 @@
   // 順便也方便在 Console 確認遠端到底套進了什麼。
   window.KigoMenuApi = {
     refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote,
-    bannerState: function () { return bannerState; }
+    bannerState: function () { return bannerState; },
+    // menu.js 在購物車清空、關掉加入購物車視窗、從成功頁返回菜單時呼叫
+    flushPending: flushPending
   };
 })();

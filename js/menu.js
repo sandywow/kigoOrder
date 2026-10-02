@@ -317,7 +317,8 @@ function renderSection(category) {
     const priceHtml  = item.price  ? `<div class="menu-item-price">${item.price}</div>` : '';
     // 加入購物車改成價格後面的一顆圓形＋。沒有文字了，所以 aria-label 要把
     // 「加入什麼」講清楚，報讀軟體才不會一整排都念成「按鈕」。
-    const addBtn     = item.soldOut ? '' :
+    // 沒有單價（試算表 price 欄留白）的品項只展示、不開放線上點，免得變成 0 元的單
+    const addBtn     = (item.soldOut || itemUnitPrice(item) === null) ? '' :
       `<button class="add-to-cart" onclick="addToCart('${category}',${i})"` +
       ` aria-label="加入購物車：${(item.name || '').replace(/"/g, '&quot;')}" title="加入購物車">` +
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">` +
@@ -546,16 +547,28 @@ function renderBannerSlide(index, noFade) {
 // ─────────────────────────────────────
 let cart = [];
 
-function getPriceNumber(price) {
-  if (!price) return 0;
-  const m = String(price).match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : 0;
+// 品項單價。回傳 null = 沒有可用的單價，這個品項不開放線上點。
+// 遠端菜單有 priceValue（試算表 price 欄的數字，留白是 null）就只看它 ——
+// 顯示用的 price 可能是「2入 NT$180」「NT$1,200」這種文字，抓第一組數字會抓錯。
+// config.js 的備援資料沒有 priceValue，才退回從顯示文字找 NT$ 後面的數字。
+// 送單後伺服器會再用 Items 工作表核對一次，以那邊為準。
+function itemUnitPrice(item) {
+  if (!item) return null;
+  if (Object.prototype.hasOwnProperty.call(item, 'priceValue')) {
+    const v = item.priceValue;
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+  }
+  if (!item.price) return null;
+  const text = String(item.price).replace(/,/g, '');
+  const m = text.match(/NT\$\s*(\d+)/i) || text.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
 }
 
 function addToCart(cat, idx) {
   const item = (menuData[cat] || [])[idx];
   if (!item) return;
   if (item.soldOut) { showToast('此品項已售完'); return; }
+  if (itemUnitPrice(item) === null) { showToast('此品項暫不開放線上點餐'); return; }
   openAddToCartModal(cat, idx);
 }
 
@@ -621,7 +634,7 @@ function updateModalTotal() {
   if (!item || !input || !priceEl) return;
   let qty = parseInt(input.value, 10);
   if (!qty || qty < 1) qty = 1;
-  const total = getPriceNumber(item.price) * qty;
+  const total = (itemUnitPrice(item) || 0) * qty;
   priceEl.textContent = `NT$${total}`;
 }
 
@@ -631,6 +644,7 @@ function closeAddToCartModal() {
   if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
   if (backdrop) backdrop.classList.remove('open');
   pendingCartSelection = null;
+  flushPendingMenu();
 }
 
 function changeModalQty(delta) {
@@ -696,13 +710,14 @@ function renderCart() {
     wrap.innerHTML = '<div class="cart-empty">購物車目前是空的</div>';
     countEl.textContent = '0';
     totalEl.textContent = 'NT$0';
+    flushPendingMenu();
     return;
   }
   let html = '';
   let total = 0;
   cart.forEach((c, i) => {
     const item = (menuData[c.cat] || [])[c.idx] || {};
-    const price = getPriceNumber(item.price);
+    const price = itemUnitPrice(item) || 0;
     total += price * c.qty;
     const tempLabel = c.temp ? ` <span class="cart-item-temp">(${c.temp === 'hot' ? '熱' : c.temp === 'iced' ? '冰' : c.temp})</span>` : '';
     html += `<div class="cart-item">
@@ -811,6 +826,33 @@ function backToMenuFromSuccess() {
   renderCart();
   document.getElementById('order-success-page').classList.replace('visible', 'hidden');
   showMenu();
+  // 點餐中擱著的新菜單，購物車清空了就可以套（這條路不會經過首頁）
+  flushPendingMenu();
+}
+
+// 購物車空了、加入購物車視窗也關了 → 把點餐途中擱著的新菜單套上去（見 js/menu-api.js）。
+// 用 setTimeout 讓目前這一輪的畫面更新先做完，再換資料重畫。
+function flushPendingMenu() {
+  if (cart.length || pendingCartSelection) return;
+  setTimeout(() => {
+    if (window.KigoMenuApi && typeof window.KigoMenuApi.flushPending === 'function') {
+      window.KigoMenuApi.flushPending();
+    }
+  }, 0);
+}
+
+// 遠端菜單晚到、客人已經在菜單頁時，menu-api.js 套完資料會呼叫這裡重畫目前的分類。
+// initLanding() 會重建頁籤（回到第一個），這裡把原本看的分類和捲動位置還原。
+function rerenderMenuPage(prevKey) {
+  const menuPage = document.getElementById('menu-page');
+  if (!menuPage || !menuPage.classList.contains('visible') || !tabs.length) return;
+  const key = tabs.some(t => t.key === prevKey) ? prevKey : tabs[0].key;
+  const scrollTop = menuPage.scrollTop;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-key') === key);
+  });
+  renderSection(key);
+  menuPage.scrollTop = scrollTop;
 }
 
 function submitOrder() {
@@ -834,7 +876,8 @@ function submitOrder() {
       category: c.cat,
       quantity: c.qty,
       temp: c.temp || null,
-      unitPrice: getPriceNumber(item.price)
+      id: item.id || null,
+      unitPrice: itemUnitPrice(item) || 0
     };
   });
   const total = orderItems.reduce((sum, item) => sum + (item.unitPrice || 0) * item.quantity, 0);
@@ -894,6 +937,12 @@ function submitOrder() {
       done();
       // 以伺服器發的編號為準，才會跟 Google 試算表上的一致
       if (data.orderId) payload.orderId = data.orderId;
+      // 單價以伺服器核對 Items 工作表後的為準（客人的菜單可能是舊價），收據照這份顯示。
+      // 伺服器會濾掉無效品項，數量對不上就不套，維持原本的顯示。
+      if (Array.isArray(data.items) && data.items.length === payload.items.length) {
+        data.items.forEach((s, i) => { payload.items[i].unitPrice = Number(s.unitPrice) || 0; });
+        if (typeof data.total === 'number') payload.total = data.total;
+      }
       saveOrderToHistory(payload);
       finishOrder(payload);
     }, err => {

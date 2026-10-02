@@ -189,9 +189,18 @@ function buildMenuPayload(siteParam) {
   };
 }
 
+// Items 的 price 欄 → 數字；留白、不是數字、負數都回 null（＝沒有價格，前台不開放點）。
+// ⚠ 不能直接 Number(row.price)：Number('') 是 0，價格欄留白的品項會變成 NT$0 還能下單。
+// Code.gs 送單時重算單價也用這一支，兩邊判斷才會一致。
+function menuPriceNumber(value) {
+  var raw = value == null ? '' : String(value).trim();
+  if (raw === '') return null;
+  var n = Number(raw);
+  return (isNaN(n) || n < 0) ? null : n;
+}
+
 function shapeMenuItem(row, showTemp) {
-  var priceNumber = Number(row.price);
-  if (isNaN(priceNumber)) priceNumber = null;
+  var priceNumber = menuPriceNumber(row.price);
   var priceText = menuBlankToNull(row.priceText);
 
   var out = {
