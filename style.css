@@ -2,7 +2,9 @@
 :root { color-scheme: only light; }
 @media (prefers-color-scheme: dark) {
   html { background: #F7F3EC; color: #1E1609; filter: none !important; }
-  :root { color-scheme: light; }
+  /* 一定要是 only light：寫成 light 會蓋掉上面那行的 only，
+     Chrome Android 的「自動深色模式」就可能再把頁面反色 */
+  :root { color-scheme: only light; }
 }
 
 /* ─── CSS Variables ─── */
