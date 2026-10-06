@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 9;   // v9: 客人送單帶 clientRequestId，重送不會重複建單（v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 10;  // v10: 客人送單檢查數量／招待／單價、防公式注入、限制收單頻率（v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -259,6 +259,10 @@ function doGet(e) {
    新增訂單
    ═════════════════════════════ */
 function handleCreateOrder(payload) {
+  // 客人送的單不需要 token，任何人都打得到，內容要先過一輪檢查（見 checkCustomerOrder）。
+  // 後台補登要 token，是店家自己填的，不受這些限制。
+  if (!payload.manual) checkCustomerOrder(payload);
+
   var items = normalizeItems(Array.isArray(payload.items) ? payload.items : []);
   if (!items.length) throw new Error('order has no items');
 
@@ -277,6 +281,8 @@ function handleCreateOrder(payload) {
       previous.duplicate = true;
       return jsonResponse(previous);
     }
+    // 放在重送檢查之後：重送不算新的一張，不佔額度
+    if (!payload.manual) checkOrderRate();
 
     var sheet = getOrCreateSheet();
     // 訂單編號一律由伺服器發號（KG+年份後兩碼+MMDD+當日序號，例如 KG260805001）。
@@ -286,12 +292,19 @@ function handleCreateOrder(payload) {
     // 後台補登可以指定日期（例如補登昨天漏記的單），一般訂單就是現在時間
     var receivedAt = (payload.manual && toDateOrNull(payload.receivedAt)) || new Date();
 
+    var orderId = nextOrderId(sheet, receivedAt);
+    // 一天的單數上限：正常營業遠遠用不到，是給「有人寫程式灌單」的最後一道擋。
+    // 補登不受限（店家自己的操作）。
+    if (!payload.manual && orderSequence(orderId) > ORDER_DAILY_LIMIT) {
+      throw new Error('daily order limit reached');
+    }
+
     var ctx = {
-      orderId: nextOrderId(sheet, receivedAt),
+      orderId: orderId,
       receivedAt: receivedAt,
       // 存成日期物件而不是字串，試算表才會用你設定的時區(GMT+8)顯示
       clientCreatedAt: toDateOrNull(payload.createdAt) || '',
-      pageUrl: (payload.meta && payload.meta.pageUrl) || '',
+      pageUrl: cleanText((payload.meta && payload.meta.pageUrl) || '', 300),
       // 金額一律由伺服器依品項重算，不直接採用前端送來的 total
       orderTotal: chargedTotal(items),
       tableNumber: cleanText(payload.tableNumber, 20),
@@ -327,6 +340,78 @@ function handleCreateOrder(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ── 客人送單的內容檢查 ──
+   /exec 網址寫在公開的前台程式碼裡，客人送單又不需要 token，
+   所以任何人都能自己組一張單送進來。這裡擋掉兩類問題：
+   ① 把單改成 0 元：招待數量一律歸零（招待只有店家能在後台給）、
+      數量必須是 1～ORDER_MAX_QTY 的整數（擋 0.01 這種小數）、
+      單價不能是負數（菜單找不到的品項會沿用前端單價，負數可以抵掉整張單）。
+   ② 灌單：品項數、每個欄位的長度都有上限，太誇張的單直接拒收。
+   限制都抓得很寬，正常點餐碰不到；前台 js/menu.js 的 MAX_ITEM_QTY 要跟 ORDER_MAX_QTY 一致。 */
+var ORDER_MAX_LINES = 50;           // 一張單最多幾個品項（同品項同冰熱算一行）
+var ORDER_MAX_QTY = 99;             // 每個品項最多點幾份
+var ORDER_MAX_UNIT_PRICE = 100000;
+var ORDER_RATE_PER_MINUTE = 20;     // 全店每分鐘最多收幾張客人的單
+var ORDER_DAILY_LIMIT = 300;        // 全店每天最多收幾張客人的單
+var ORDER_VALID_TEMPS = ['', 'hot', 'iced'];
+
+function checkCustomerOrder(payload) {
+  var items = payload.items;
+  if (!Array.isArray(items)) throw new Error('order has no items');
+  if (items.length > ORDER_MAX_LINES) throw new Error('too many items in one order');
+
+  items.forEach(function (item) {
+    if (!item || typeof item !== 'object') throw new Error('invalid item');
+    var qty = Number(item.quantity);
+    if (!isFinite(qty) || qty !== Math.floor(qty) || qty < 1 || qty > ORDER_MAX_QTY) {
+      throw new Error('invalid quantity: ' + item.quantity);
+    }
+    var price = Number(item.unitPrice || 0);
+    if (!isFinite(price) || price < 0 || price > ORDER_MAX_UNIT_PRICE) {
+      throw new Error('invalid unitPrice: ' + item.unitPrice);
+    }
+    if (String(item.name == null ? '' : item.name).length > 60 ||
+        String(item.category == null ? '' : item.category).length > 30 ||
+        String(item.id == null ? '' : item.id).length > 40) {
+      throw new Error('item field too long');
+    }
+    var temp = String(item.temp == null ? '' : item.temp);
+    if (ORDER_VALID_TEMPS.indexOf(temp) === -1) throw new Error('invalid temp: ' + temp);
+
+    item.freeQty = 0;   // 客人不能給自己招待
+  });
+}
+
+// 全店每分鐘的收單數。Apps Script 拿不到客人的 IP，只能限制總量：
+// 有人灌單時最多每分鐘多 ORDER_RATE_PER_MINUTE 張垃圾單，而不是無限多。
+// 在鎖裡面呼叫，計數才不會被同時到的請求算漏。快取服務出問題就不限制，不能擋住正常送單。
+function checkOrderRate() {
+  var cache, key, count;
+  try {
+    cache = CacheService.getScriptCache();
+    key = 'rate:' + Math.floor(Date.now() / 60000);
+    count = Number(cache.get(key)) || 0;
+  } catch (err) {
+    return;
+  }
+  if (count >= ORDER_RATE_PER_MINUTE) throw new Error('too many orders, please try again later');
+  try { cache.put(key, String(count + 1), 120); } catch (err) {}
+}
+
+// KG261006042 → 42（前綴固定是 KG + yyMMdd 共 8 碼）
+function orderSequence(orderId) {
+  var n = parseInt(String(orderId).slice(8), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+// 試算表會把 = + - @ 開頭的字串當成公式執行。客人可以把品名、暱稱、桌號
+// 填成公式，店家打開試算表時就會以店家身分執行（例如把其他客人的資料傳到外部網站）。
+// 前面加一個 ' 會讓試算表當成純文字顯示（' 本身看不到，getValues 讀回來也不含 '）。
+function sheetSafeText(value) {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
 }
 
 /* ── 客人送單的單價核對 ──
@@ -698,29 +783,30 @@ function chargedTotal(items) {
 }
 
 // 一筆訂單的所有列共用 ctx 這些欄位，只有品項相關的欄位不同
+// 文字欄一律過 sheetSafeText：新增、修改訂單都走這裡，客人填的內容不會變成公式。
 function buildItemRow(ctx, item) {
   return [
     ctx.orderId,
     ctx.receivedAt,
     ctx.clientCreatedAt,
-    item.name,
-    item.category,
-    item.temp,
+    sheetSafeText(item.name),
+    sheetSafeText(item.category),
+    sheetSafeText(item.temp),
     item.quantity,
     item.unitPrice,
     item.chargedQty * item.unitPrice,
     ctx.orderTotal,
-    ctx.pageUrl,
-    ctx.tableNumber,
+    sheetSafeText(ctx.pageUrl),
+    sheetSafeText(ctx.tableNumber),
     ctx.status,
-    ctx.originalItems,
+    sheetSafeText(ctx.originalItems),
     ctx.updatedAt,
-    ctx.changeLog,
+    sheetSafeText(ctx.changeLog),
     item.freeQty,
     item.chargedQty,
     item.freeQty * item.unitPrice,
     ctx.paymentStatus,
-    ctx.nickname
+    sheetSafeText(ctx.nickname)
   ];
 }
 

@@ -634,6 +634,7 @@ function updateModalTotal() {
   if (!item || !input || !priceEl) return;
   let qty = parseInt(input.value, 10);
   if (!qty || qty < 1) qty = 1;
+  if (qty > MAX_ITEM_QTY) qty = MAX_ITEM_QTY;
   const total = (itemUnitPrice(item) || 0) * qty;
   priceEl.textContent = `NT$${total}`;
 }
@@ -651,7 +652,7 @@ function changeModalQty(delta) {
   const input = document.getElementById('modal-qty-input');
   if (!input) return;
   let value = parseInt(input.value, 10) || 1;
-  value = Math.max(1, value + delta);
+  value = Math.min(MAX_ITEM_QTY, Math.max(1, value + delta));
   input.value = value;
   updateModalTotal();
 }
@@ -666,6 +667,7 @@ function confirmAddToCart() {
   const input = document.getElementById('modal-qty-input');
   let qty = input ? parseInt(input.value, 10) : 1;
   if (!qty || qty < 1) qty = 1;
+  if (qty > MAX_ITEM_QTY) qty = MAX_ITEM_QTY;
 
   let temp = null;
   if (item.temp === 'both') {
@@ -678,7 +680,7 @@ function confirmAddToCart() {
 
   const found = cart.find(c => c.cat === cat && c.idx === idx && c.temp === temp);
   if (found) {
-    found.qty += qty;
+    found.qty = Math.min(MAX_ITEM_QTY, found.qty + qty);
   } else {
     cart.push({ cat, idx, qty, temp });
   }
@@ -736,7 +738,7 @@ function renderCart() {
 function changeQty(i, delta) {
   if (blockedBySubmitting()) return;
   if (!cart[i]) return;
-  cart[i].qty += delta;
+  cart[i].qty = Math.min(MAX_ITEM_QTY, cart[i].qty + delta);
   if (cart[i].qty <= 0) cart.splice(i, 1);
   renderCart();
 }
@@ -972,6 +974,9 @@ function submitOrder() {
 }
 
 const ORDER_TIMEOUT_MS = 30000;   // 伺服器搶鎖最多等 20 秒，再留一點餘裕
+
+// 每個品項最多點幾份。伺服器 Code.gs 的 ORDER_MAX_QTY 超過就整張單拒收，兩邊要一致。
+const MAX_ITEM_QTY = 99;
 
 // 送出了但還沒確認成功的那張單：{ requestId, fingerprint }。成功就清掉，失敗就留著給重送用。
 // 只放在記憶體：重新整理頁面購物車也會清空，沒有東西可以重送。
