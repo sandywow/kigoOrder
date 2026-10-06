@@ -881,7 +881,21 @@ function submitOrder() {
     };
   });
   const total = orderItems.reduce((sum, item) => sum + (item.unitPrice || 0) * item.quantity, 0);
+
+  // 這張單的識別碼：上一次送出沒確認成功、內容也沒變 → 沿用同一組，伺服器會認出是重送，不會多一張。
+  // 內容變了就不能沿用（伺服器會回傳舊內容，新加的東西就不見了），但上一次可能其實成功了，先問客人。
+  const fingerprint = orderFingerprint(orderItems, seating);
+  let requestId;
+  if (unconfirmedOrder && unconfirmedOrder.fingerprint === fingerprint) {
+    requestId = unconfirmedOrder.requestId;
+  } else {
+    if (unconfirmedOrder && !confirm('上一次送出的訂單可能已經成功了，請先向店員確認。\n\n確定要用目前的購物車再送一張新的訂單嗎？')) return;
+    requestId = newRequestId();
+  }
+  unconfirmedOrder = { requestId, fingerprint };
+
   const payload = {
+    clientRequestId: requestId,
     orderId: generateOrderId(),
     createdAt: new Date().toISOString(),
     tableNumber: seating ? seating.tableNumber : null,
@@ -900,6 +914,7 @@ function submitOrder() {
 
   // 沒有設定送單網址（本機測試）就只存本機紀錄
   if (!endpoint) {
+    unconfirmedOrder = null;
     saveOrderToHistory(payload);
     finishOrder(payload);
     return;
@@ -935,6 +950,7 @@ function submitOrder() {
     })
     .then(data => {
       done();
+      unconfirmedOrder = null;   // 伺服器確認收到了（重送的話是原本那張），下一張用新的識別碼
       // 以伺服器發的編號為準，才會跟 Google 試算表上的一致
       if (data.orderId) payload.orderId = data.orderId;
       // 單價以伺服器核對 Items 工作表後的為準（客人的菜單可能是舊價），收據照這份顯示。
@@ -948,17 +964,32 @@ function submitOrder() {
     }, err => {
       done();
       console.error('Sync order to Sheets failed:', err);
-      // 購物車原封不動留著，客人可以直接再按一次。
-      // 逾時的話伺服器可能其實已經收到了（伺服器不會擋重複的單），
-      // 所以請客人先跟店員確認，免得同一張單做兩份。
+      // 購物車原封不動留著，unconfirmedOrder 也留著：內容沒改就再按一次，
+      // 會沿用同一組識別碼，伺服器其實已經收到的話只會回傳原本那張，不會多一張。
       const timedOut = err && err.name === 'AbortError';
-      showToast(timedOut
-        ? '連線逾時，為避免重複下單\n請向店員確認訂單是否送出'
-        : '訂單送出失敗\n請再按一次「送出訂單」', 6000);
+      showToast((timedOut ? '連線逾時' : '訂單送出失敗') + '\n請再按一次「送出訂單」', 6000);
     });
 }
 
 const ORDER_TIMEOUT_MS = 30000;   // 伺服器搶鎖最多等 20 秒，再留一點餘裕
+
+// 送出了但還沒確認成功的那張單：{ requestId, fingerprint }。成功就清掉，失敗就留著給重送用。
+// 只放在記憶體：重新整理頁面購物車也會清空，沒有東西可以重送。
+let unconfirmedOrder = null;
+
+function newRequestId() {
+  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+// 判斷「這次要送的跟上次是不是同一張單」：品項、數量、冰熱、桌號、暱稱都一樣才算
+function orderFingerprint(items, seat) {
+  return JSON.stringify([
+    items.map(i => [i.id, i.name, i.category, i.quantity, i.temp]),
+    seat ? seat.tableNumber : null,
+    seat ? seat.nickname : null
+  ]);
+}
 let orderSubmitting = false;
 
 // 送單中：按鈕改成「送出中…」並停用，購物車裡的按鈕一起擋住，

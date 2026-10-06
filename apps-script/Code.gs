@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 8;   // v8: 客人送單的單價改用 Items 工作表核對（v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 9;   // v9: 客人送單帶 clientRequestId，重送不會重複建單（v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -269,6 +269,15 @@ function handleCreateOrder(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    // 同一張單重送（回應在路上丟了、客人再按一次）：直接回傳第一次的結果，不再寫一筆。
+    // 一定要在鎖裡面查，兩個同時到的重送才不會都判定成「沒收過」。
+    var requestId = payload.manual ? '' : cleanRequestId(payload.clientRequestId);
+    var previous = requestId ? readOrderReceipt(requestId) : null;
+    if (previous) {
+      previous.duplicate = true;
+      return jsonResponse(previous);
+    }
+
     var sheet = getOrCreateSheet();
     // 訂單編號一律由伺服器發號（KG+年份後兩碼+MMDD+當日序號，例如 KG260805001）。
     // 早期版本是由客人手機各自計算的，多人同時點餐時會產生一樣的號碼，
@@ -306,13 +315,15 @@ function handleCreateOrder(payload) {
 
     var rows = items.map(function (item) { return buildItemRow(ctx, item); });
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, SHEET_HEADERS.length).setValues(rows);
-    return jsonResponse({
+    var receipt = {
       ok: true, orderId: ctx.orderId, total: ctx.orderTotal,
       // 伺服器實際採用的單價，前台收據照這份顯示
       items: items.map(function (item) {
         return { name: item.name, temp: item.temp, quantity: item.quantity, unitPrice: item.unitPrice };
       })
-    });
+    };
+    if (requestId) saveOrderReceipt(requestId, receipt);
+    return jsonResponse(receipt);
   } finally {
     lock.releaseLock();
   }
@@ -374,6 +385,35 @@ function menuPriceIndex() {
 
 function clearMenuPriceCache() {
   try { CacheService.getScriptCache().remove(MENU_PRICE_CACHE_KEY); } catch (err) {}
+}
+
+/* ── 重送防重複 ──
+   前台每張單帶一組 clientRequestId，同一張單重送時沿用同一組。
+   第一次寫入成功就把回應存進 CacheService，之後再收到同一組就直接回傳那份，
+   不再寫一筆。存 6 小時（CacheService 上限），重送通常幾秒到幾分鐘內就會發生。
+   快取服務出問題時退回「照常建單」—— 最壞就是跟以前一樣可能重複，不會擋住送單。 */
+var ORDER_RECEIPT_SECONDS = 21600;
+
+function cleanRequestId(value) {
+  var id = String(value == null ? '' : value).trim();
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : '';
+}
+
+function readOrderReceipt(requestId) {
+  try {
+    var hit = CacheService.getScriptCache().get('receipt:' + requestId);
+    return hit ? JSON.parse(hit) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveOrderReceipt(requestId, receipt) {
+  try {
+    CacheService.getScriptCache().put('receipt:' + requestId, JSON.stringify(receipt), ORDER_RECEIPT_SECONDS);
+  } catch (err) {
+    // 存不進去（太大或服務異常）就算了，訂單已經寫好，只是這張單失去重送保護
+  }
 }
 
 // 找出「該日期」已經用到的最大流水號 +1。必須在 LockService 的鎖裡呼叫才安全。
