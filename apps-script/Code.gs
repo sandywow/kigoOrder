@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 10;  // v10: 客人送單檢查數量／招待／單價、防公式注入、限制收單頻率（v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 11;  // v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -133,6 +133,7 @@ function doPost(e) {
         return handleSaveMenu(payload);
       } finally {
         clearMenuPriceCache();   // 價格可能改了，送單核對要用新的
+        clearMenuPayloadCache(); // 前台的菜單也要馬上換成新的
       }
     }
 
@@ -239,7 +240,7 @@ function doGet(e) {
     }
     // 共同菜單資料 — 實作在 Menu.gs
     if (params.action === 'menu') {
-      return jsonResponse(buildMenuPayload(params.site));
+      return jsonResponse(buildMenuPayloadCached(params.site));
     }
     if (params.action === 'menuRaw') {
       return jsonResponse(buildMenuRawPayload());
@@ -470,6 +471,49 @@ function menuPriceIndex() {
 
 function clearMenuPriceCache() {
   try { CacheService.getScriptCache().remove(MENU_PRICE_CACHE_KEY); } catch (err) {}
+}
+
+/* ── 前台菜單快取（action=menu）──
+   每次組菜單都要讀五張工作表，大約 2～3 秒；第一次來的客人海報要等它回來才知道要載哪張。
+   組好的菜單用 CacheService 存 MENU_PAYLOAD_CACHE_SECONDS 秒，所有客人共用。
+   從後台儲存菜單（saveMenu）會立刻作廢；直接在試算表改的話，最多晚這麼久才生效。
+   後台用的 action=menuRaw 不快取，後台永遠讀到最新的。 */
+var MENU_PAYLOAD_CACHE_SECONDS = 300;
+var MENU_PAYLOAD_SITES = ['orderWeb', 'menuWeb'];
+
+function menuPayloadCacheKey(site) {
+  return 'menu:payload:' + site;
+}
+
+function buildMenuPayloadCached(siteParam) {
+  var site = String(siteParam == null ? '' : siteParam).trim();
+  // 只快取已知的站，site 是網址參數、隨便填都行，不能讓它變成任意的快取 key
+  if (MENU_PAYLOAD_SITES.indexOf(site) === -1) return buildMenuPayload(siteParam);
+
+  var cache = null;
+  try {
+    cache = CacheService.getScriptCache();
+    var hit = cache.get(menuPayloadCacheKey(site));
+    if (hit) return JSON.parse(hit);
+  } catch (err) {
+    cache = null;
+  }
+
+  var payload = buildMenuPayload(site);
+  // 只存成功的菜單；工作表還沒建好時的 ok:false 不能被快取住
+  if (cache && payload && payload.ok) {
+    try {
+      // 單一個值上限 100KB，放不下就不快取，照樣回傳
+      cache.put(menuPayloadCacheKey(site), JSON.stringify(payload), MENU_PAYLOAD_CACHE_SECONDS);
+    } catch (err) {}
+  }
+  return payload;
+}
+
+function clearMenuPayloadCache() {
+  try {
+    CacheService.getScriptCache().removeAll(MENU_PAYLOAD_SITES.map(menuPayloadCacheKey));
+  } catch (err) {}
 }
 
 /* ── 重送防重複 ──

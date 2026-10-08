@@ -29,6 +29,10 @@
   <meta name="twitter:description" content="精選當季咖啡、茶飲與手作甜點。每日限量，慢慢享受。">
   <meta name="twitter:image" content="https://sandywow.github.io/kigoMenu/src/lemon%20pound.jpg">
 
+  <!-- 菜單 API（Apps Script）：頁面一打開就先把連線建好，第一次來的客人海報可以早一點出現。
+       /exec 會轉址到 googleusercontent 回傳資料，兩個網域都要。fetch 不帶 cookie，所以要加 crossorigin -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+TC:wght@300;400&family=DM+Serif+Display:ital@0;1&family=Allura&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
