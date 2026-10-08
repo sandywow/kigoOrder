@@ -267,7 +267,9 @@ const landingData = {
   showDate: false,
   dateSeasonLabel: "Spring Menu",
   heroImage: null,
-  bannerImages: ["src/BANNER AFFOGATO-04.webp","src/BANNER FISH-03.webp","src/BANNER POTATO-02.webp"],
+  // 首頁海報：頁面一打開就直接顯示這幾張（不等試算表）。在後台／試算表換海報時這裡要同步改，
+  // 否則客人會先看到這裡的舊海報，等試算表的資料回來才換成新的。
+  bannerImages: ["src/BANNER GOLDEN-06.webp"],
   heroBadge: "當季限定",
   heroTitle: "草莓千層酥",
   heroSubtitle: "本週限定 · 每日限量",

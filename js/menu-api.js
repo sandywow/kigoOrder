@@ -31,24 +31,21 @@
   var appliedSignature = null;
   var pendingPayload = null;   // 有東西在購物車時先擱著，等結完單再套
 
-  /* ── 海報要不要先等遠端 ──
-     沒有快取（第一次來、無痕模式、快取過期）時，config.js 的海報是舊圖，
-     直接畫出來會「先閃舊海報、一秒後才換新的」。所以這種情況海報區先顯示
-     咖啡杯載入動畫，等遠端回來再畫。
-       'waiting' → 還在等遠端，顯示載入動畫
-       'ready'   → 有遠端資料（或快取），照常畫
-       'failed'  → 遠端失敗或超過 BANNER_WAIT_MS，整個海報區隱藏，
-                   刻意不退回 config.js 的舊海報；遠端之後才到的話還是會補畫
-     js/menu.js 的 initLanding() 透過 KigoMenuApi.bannerState() 讀這個狀態。 */
-  var BANNER_WAIT_MS = 10000;
-  var bannerState = 'waiting';
-  // 海報狀態變了但當下不能重畫（客人不在首頁）→ 記著，回到首頁再畫
+  /* ── 海報 ──
+     海報一律先用 js/config.js 的 bannerImages 畫（不等遠端），打開最快。
+     本機快取（①）也不拿來畫海報：快取可能是好幾天前的，config.js 才是店家換海報時同步更新的那份。
+     遠端（②）回來的清單跟畫面上的不一樣才換上去；一樣就什麼都不做，不會閃。
+     ⚠ 換海報時要同步更新 js/config.js 的 bannerImages，不然客人會先看到舊的再換成新的。 */
+  // 海報變了但當下不能重畫（客人不在首頁）→ 記著，回到首頁再畫
   var bannerDirty = false;
 
-  function settleBanner(state) {
-    if (bannerState !== 'waiting') return;
-    bannerState = state;
-    repaintBanner();
+  // config.js 寫相對路徑（src/BANNER xx.webp），遠端給完整網址（%20 編碼），
+  // 比對前都換成完整網址，同一張圖才不會被當成不一樣而重畫
+  function normalizeBanners(list) {
+    if (!Array.isArray(list)) return list;
+    return list.map(function (u) {
+      try { return new URL(String(u), document.baseURI).href; } catch (e) { return String(u); }
+    });
   }
 
   // 重畫首頁只是把 landingData 畫出來，跟購物車無關，所以只要求「首頁看得到」。
@@ -149,7 +146,11 @@
 
   function signatureOf(payload) {
     try {
-      return JSON.stringify([payload.menuData, payload.landingData, payload.tabs, payload.sectionTitles]);
+      var ld = payload.landingData;
+      if (ld && Array.isArray(ld.bannerImages)) {
+        ld = Object.assign({}, ld, { bannerImages: normalizeBanners(ld.bannerImages) });
+      }
+      return JSON.stringify([payload.menuData, ld, payload.tabs, payload.sectionTitles]);
     } catch (e) {
       return null;
     }
@@ -215,9 +216,17 @@
       var cached = JSON.parse(raw);
       if (!cached || cached.site !== SITE || !cached.payload) return;
       if (!cached.savedAt || Date.now() - cached.savedAt > CACHE_MAX_AGE_MS) return;
-      if (applyPayload(cached.payload)) {
-        appliedSignature = signatureOf(cached.payload);
-        bannerState = 'ready';   // 快取就是上次的遠端資料，直接畫
+      // 海報不用快取的，維持 config.js 的（見上面「海報」的說明）。
+      // signature 也照「畫面上實際是 config.js 的海報」來算，遠端清單跟 config.js 一樣時才不會多重畫一次。
+      var payload = cached.payload;
+      if (payload.landingData) {
+        payload = Object.assign({}, payload, {
+          landingData: Object.assign({}, payload.landingData, { bannerImages: landingData.bannerImages })
+        });
+      }
+      if (applyPayload(payload)) {
+        delete remote.landingKeys.bannerImages;
+        appliedSignature = signatureOf(payload);
       }
     } catch (e) {}
   })();
@@ -236,7 +245,6 @@
           // 安靜地沿用快取／config.js，客人照樣點得到餐，也不要污染快取
           console.warn('[menu-api] 遠端還沒有菜單資料，沿用本機資料',
             (payload && payload.error) || (payload && payload.message) || '');
-          settleBanner('failed');
           return;
         }
 
@@ -256,22 +264,17 @@
             // 客人正在點餐，先擱著，等回到首頁（結完單／清空購物車）再套
             pendingPayload = payload;
             applyBannerOnly(payload);
-            bannerState = 'ready';
             repaintBanner();
             return;
           }
           if (applyPayload(payload)) {
             appliedSignature = signature;
-            bannerState = 'ready';   // 就算已經逾時成 'failed'，晚到的資料一樣補畫
             repaint();
-          } else {
-            settleBanner('failed');
           }
         });
       })
       .catch(function (err) {
         console.warn('[menu-api] 讀取遠端菜單失敗，沿用本機資料', err);
-        settleBanner('failed');
       });
   }
 
@@ -282,7 +285,6 @@
     pendingPayload = null;
     if (applyPayload(payload)) {
       appliedSignature = signatureOf(payload);
-      bannerState = 'ready';
       repaint();
     }
   }
@@ -298,21 +300,13 @@
     }).observe(landing, { attributes: true, attributeFilter: ['class'] });
   });
 
-  if (typeof fetch === 'function' && endpoint()) {
-    refresh();
-    if (bannerState === 'waiting') {
-      setTimeout(function () { settleBanner('failed'); }, BANNER_WAIT_MS);
-    }
-  } else {
-    bannerState = 'ready';
-  }
+  if (typeof fetch === 'function' && endpoint()) refresh();
 
   // 除錯用：Console 打 KigoMenuApi.refresh()
   // remote 給 js/menu.js 判斷「哪些欄位不要再被後台舊值蓋掉」，
   // 順便也方便在 Console 確認遠端到底套進了什麼。
   window.KigoMenuApi = {
     refresh: refresh, cacheKey: CACHE_KEY, site: SITE, remote: remote,
-    bannerState: function () { return bannerState; },
     // menu.js 在購物車清空、關掉加入購物車視窗、從成功頁返回菜單時呼叫
     flushPending: flushPending
   };

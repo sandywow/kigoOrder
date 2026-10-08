@@ -432,6 +432,7 @@ function buildTabs() {
 let bannerCarouselTimer = null;
 let bannerCarouselIndex = 0;
 let bannerCarouselImages = [];
+let renderedBannerKey = '';   // 目前輪播畫的是哪一份海報清單（initLanding 比對用）
 let pendingCartSelection = null;
 
 function clearBannerCarousel() {
@@ -1083,9 +1084,21 @@ function initLanding() {
      bannerImage null + bannerPlaceholder false/null → 整區塊隱藏 */
   const bannerSection = document.getElementById('banner-section');
   const bannerDisplay = document.getElementById('banner-display');
-  clearBannerCarousel();
-  bannerCarouselImages = Array.isArray(ld.bannerImages) ? ld.bannerImages.filter(Boolean) : [];
-  bannerCarouselIndex = 0;
+  // 遠端菜單回來會重跑 initLanding。海報清單跟畫面上的一樣（config.js 有同步更新時就是這樣）
+  // 就不要重畫，否則同一張海報會被拆掉重建、輪播也被打斷。
+  // config.js 是相對路徑、遠端是完整網址，換成完整網址再比。
+  const nextBanners = Array.isArray(ld.bannerImages) ? ld.bannerImages.filter(Boolean) : [];
+  const bannerKey = JSON.stringify(nextBanners.map(u => {
+    try { return new URL(u, document.baseURI).href; } catch (e) { return String(u); }
+  }));
+  const bannerUnchanged = nextBanners.length > 0 && bannerKey === renderedBannerKey &&
+    !!(bannerDisplay && bannerDisplay.querySelector('.banner-slide.visible'));
+  if (!bannerUnchanged) {
+    clearBannerCarousel();
+    bannerCarouselImages = nextBanners;
+    bannerCarouselIndex = 0;
+    renderedBannerKey = '';   // 下面真的畫了輪播才會記上
+  }
   setOrHide('banner-label-text', ld.bannerLabel);
 
   // initLanding() 會被重跑（遠端菜單晚一步到就是走這條路）。
@@ -1093,36 +1106,18 @@ function initLanding() {
   // 遠端補上海報後圖只是畫進一個看不見的容器裡，畫面上永遠不會出現。
   if (bannerSection) bannerSection.style.display = '';
 
-  // 沒有快取時不畫 config.js 的舊海報（見 js/menu-api.js 的 bannerState）：
-  // 等遠端時顯示咖啡杯載入動畫；遠端失敗就整區隱藏，不退回舊海報。
-  const menuApi = window.KigoMenuApi;
-  const bannerState = (menuApi && menuApi.bannerState) ? menuApi.bannerState() : 'ready';
-  const hasRemoteBanner = !!(menuApi && menuApi.remote && menuApi.remote.landingKeys &&
-    menuApi.remote.landingKeys.bannerImages);
-
-  if (bannerState === 'waiting') {
-    if (bannerDisplay) {
-      bannerDisplay.style.height = '';
-      bannerDisplay.innerHTML = `
-        <div class="banner-loading" role="status" aria-label="海報載入中">
-          <svg class="banner-loading-cup" viewBox="0 0 64 64" aria-hidden="true">
-            <path class="steam s1" d="M24 22c-3-4 3-6 0-10s3-6 0-9"/>
-            <path class="steam s2" d="M32 22c-3-4 3-6 0-10s3-6 0-9"/>
-            <path class="steam s3" d="M40 22c-3-4 3-6 0-10s3-6 0-9"/>
-            <path class="cup" d="M14 28h36v8c0 9-7 16-16 16h-4c-9 0-16-7-16-16z"/>
-            <path class="cup" d="M50 31h3a6 6 0 0 1 0 12h-4"/>
-            <path class="cup" d="M10 57h44"/>
-          </svg>
-          <div class="banner-loading-text">Brewing</div>
-        </div>`;
-    }
-  } else if (bannerState === 'failed' && !hasRemoteBanner) {
-    if (bannerDisplay) bannerDisplay.innerHTML = '';
-    if (bannerSection) bannerSection.style.display = 'none';
+  // 海報一律先畫 config.js 的 bannerImages（不等 Apps Script），打開最快。
+  // 試算表的海報清單不一樣的話，js/menu-api.js 拿到之後會重跑 initLanding 換上去。
+  // ⚠ 所以換海報時要同步更新 js/config.js 的 bannerImages，否則客人會先看到舊的那張。
+  if (bannerUnchanged) {
+    // 同一份海報：只補算高度（上次可能是在首頁隱藏時畫的，那時容器寬度是 0）
+    const img = bannerDisplay.querySelector('.banner-slide.visible img');
+    if (img && img.complete) updateBannerDisplayHeight(bannerDisplay, img);
   } else if (bannerCarouselImages.length) {
+    renderedBannerKey = bannerKey;
     // 上一輪留下的單張圖／佔位符要清掉，否則會疊在輪播圖底下。
     // .banner-slide 不能清 —— renderBannerSlide 要靠舊的那張做淡入交接。
-    const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder, .banner-loading') : null;
+    const stale = bannerDisplay ? bannerDisplay.querySelector('.banner-img-wrap, .banner-placeholder') : null;
     if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
     renderBannerSlide(0, true);
     scheduleBannerCarousel();

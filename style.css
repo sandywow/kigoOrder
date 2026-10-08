@@ -504,52 +504,11 @@ body::before {
   aspect-ratio: 4500 / 7775;
   overflow: hidden;
 }
-/* 沒有快取、還在等遠端海報時的載入畫面（見 js/menu.js initLanding） */
-.banner-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  background: var(--parchment);
-  border: 1px solid var(--beige);
-  border-radius: 3px;
-}
-.banner-loading-cup {
-  width: 72px;
-  height: 72px;
-  overflow: visible;
-}
-.banner-loading-cup path {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.banner-loading-cup .cup { stroke: var(--caramel); }
-.banner-loading-cup .steam {
-  stroke: var(--caramel-lt);
-  opacity: 0;
-  animation: steamRise 2.4s ease-in-out infinite;
-}
-.banner-loading-cup .s2 { animation-delay: 0.8s; }
-.banner-loading-cup .s3 { animation-delay: 1.6s; }
+/* 咖啡杯冒煙（送單等待畫面 .order-sending-cup 用） */
 @keyframes steamRise {
   0%   { opacity: 0;   transform: translateY(6px); }
   35%  { opacity: 0.9; }
   100% { opacity: 0;   transform: translateY(-8px); }
-}
-.banner-loading-text {
-  font-family: 'DM Serif Display', serif;
-  font-size: 11px;
-  letter-spacing: 0.4em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-@media (prefers-reduced-motion: reduce) {
-  .banner-loading-cup .steam { animation: none; opacity: 0.6; }
 }
 
 .banner-slide {
