@@ -465,6 +465,7 @@ async function setOrderStatus(orderId, status) {
     if (!probe.reachable) {
       // 查不到不代表沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
       clearPendingOp(key, { status });
+      resyncOnNextPoll();
       return;
     }
     if (probe.order && probe.order.status === status) {
@@ -507,6 +508,7 @@ async function setOrderPayment(orderId, paymentStatus) {
     if (!probe.reachable) {
       // 查不到不等於沒寫成功，保留畫面上的結果，讓之後的輪詢自動校正
       clearPendingOp(key, { paymentStatus });
+      resyncOnNextPoll();
       return;
     }
     if (probe.order && paymentOf(probe.order) === paymentStatus) {
@@ -554,9 +556,15 @@ function repaintOrders() {
   paintHistory();
 }
 
-function priceNumber(price) {
-  const m = String(price == null ? '' : price).match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : 0;
+// 修改訂單／補登時帶入的單價。跟前台 itemUnitPrice、伺服器核價認定的是同一個數字：
+// 顯示文字可能是「2入 NT$180」「NT$1,200」，直接抓第一組數字會抓成 2、1。
+// 先用跟儲存菜單同一套的 splitPrice 從目前的價格欄拆（後台這次剛改過價格也算得對），
+// 拆不出來（「時價」或沒有 NT$ 的自訂文字）才退回試算表 price 欄的數字。
+function menuItemUnitPrice(item) {
+  const fromText = splitPrice(item.price).number;
+  if (typeof fromText === 'number' && isFinite(fromText)) return fromText;
+  const v = item.priceValue;
+  return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : 0;
 }
 
 function findMenuItem(cat, name) {
@@ -813,7 +821,7 @@ function changeEditItem(index, value) {
 
   row.name = item.name;
   row.category = cat;
-  row.unitPrice = priceNumber(item.price);
+  row.unitPrice = menuItemUnitPrice(item);
   // 換了品項，溫度要跟著新品項的設定走
   row.temp = item.temp === 'both' ? 'hot' : (item.temp || '');
   paintEditOrder();
@@ -892,6 +900,7 @@ async function deleteOrderById(orderId) {
     if (!probe.reachable) {
       // 查不到不代表沒刪成功，不要把訂單還原回畫面（之前就是這樣誤報的）
       pendingDeletes.delete(key);
+      resyncOnNextPoll();
       return;
     }
     if (!probe.order) {
@@ -913,6 +922,15 @@ async function deleteOrderById(orderId) {
     showToast((res && res.error) ? '刪除失敗：' + res.error : '刪除失敗，請稍後再試');
     refreshAfterWrite();
   });
+}
+
+// 寫入結果不確定（寫入失敗、確認也連不上）時，畫面先保留樂觀的結果。
+// 但伺服器資料如果其實沒變，輪詢會因為「內容跟上次一樣」跳過重畫，畫面就永遠卡在錯的狀態。
+// 清掉比對用的簽章，下一次輪詢不管有沒有變都會照伺服器的內容重畫一次。
+// 這裡不立刻重抓：連線正不穩，交給輪詢的節奏重試就好。
+function resyncOnNextPoll() {
+  todayOrdersSignature = '';
+  historySignature = '';
 }
 
 // 寫入完成後，把目前看得到的清單都重抓一次
@@ -1066,6 +1084,7 @@ async function saveOrderEdit() {
     const probe = (res && res.authFailed) ? { reachable: true, order: null } : await probeOrder(orderId);
     if (!probe.reachable) {
       clearPendingOp(key, patch);
+      resyncOnNextPoll();
       return;
     }
     if (probe.order && Number(probe.order.total) === Number(total)) {
