@@ -202,11 +202,10 @@ function showMenu(initialKey) {
   menuPage.classList.replace('hidden', 'visible');
   menuPage.scrollTop = 0;
 
-  // Activate correct tab, then render
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.getAttribute('data-key') === key);
-  });
-  renderSection(key);
+  // 全部分類一次畫出來，再跳到指定的分類（第一個分類就停在最上面）
+  renderMenu();
+  setActiveTab(key);
+  if (key !== tabs[0].key) menuPage.scrollTop = sectionScrollTop(key);
 }
 
 function showLanding() {
@@ -218,32 +217,93 @@ function showLanding() {
 /* ═════════════════════
    TAB SWITCHING
    ═════════════════════ */
+/* 菜單是一整頁滑到底的：所有分類依頁籤順序排成一長串。
+   點頁籤 = 捲到那一區；往下滑的時候，頁籤會跟著亮到目前看到的那一區。 */
 function switchTab(category, btn) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderSection(category);
-  scrollToSectionTop();
+  const page = document.getElementById('menu-page');
+  if (!page) return;
+  setActiveTab(category);
+  // 點頁籤造成的平滑捲動途中會經過別的分類，這段期間先不要讓捲動去改頁籤，
+  // 不然頁籤會一路閃過中間的每一個分類
+  tabScrollLock = true;
+  clearTimeout(tabScrollLockTimer);
+  tabScrollLockTimer = setTimeout(() => { tabScrollLock = false; }, 800);
+  page.scrollTo({ top: category === tabs[0].key ? 0 : sectionScrollTop(category), behavior: 'smooth' });
 }
 
-/* 切分類後捲回這一區的最上面。
+let tabScrollLock = false;
+let tabScrollLockTimer = null;
+
+function setActiveTab(key) {
+  let activeBtn = null;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const on = b.getAttribute('data-key') === key;
+    b.classList.toggle('active', on);
+    if (on) activeBtn = b;
+  });
+  // 頁籤列在手機上可能比螢幕寬，把亮起來的那顆捲到看得見的地方。
+  // 不用 scrollIntoView：它會連整頁一起上下捲。
+  const bar = document.getElementById('tab-bar');
+  if (bar && activeBtn && bar.scrollWidth > bar.clientWidth) {
+    const left = activeBtn.offsetLeft - (bar.clientWidth - activeBtn.offsetWidth) / 2;
+    bar.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+  }
+}
+
+/* 某一區要捲到哪裡，標題才剛好露在頁籤列下面。
 
    頁籤列是 sticky 的（top:0，黏在 #menu-page 這個捲動容器的上緣），
-   但捲動的時候瀏覽器不知道它會黏在那裡 —— 直接把 #menu-content 對齊容器頂端，
+   但捲動的時候瀏覽器不知道它會黏在那裡 —— 直接把分類對齊容器頂端，
    分類標題就正好躲到頁籤列後面被吃掉了。所以目標位置要再往上扣掉頁籤列的高度。
 
    高度是當場量的，不是寫死的數字：頁籤文字換行、字級調整都會改變它。 */
-function scrollToSectionTop() {
-  const page    = document.getElementById('menu-page');
-  const content = document.getElementById('menu-content');
-  if (!page || !content) return;
-
+function tabBarHeight() {
   const bar = document.getElementById('tab-bar');
-  const top = content.offsetTop - (bar ? Math.ceil(bar.getBoundingClientRect().height) : 0);
-
-  // 只在「已經捲過頭、標題會被蓋住」時才捲。還在上面（看得到菜單標題）
-  // 就不要自作主張把畫面往下拉。
-  if (page.scrollTop > top) page.scrollTo({ top: top, behavior: 'smooth' });
+  return bar ? Math.ceil(bar.getBoundingClientRect().height) : 0;
 }
+
+function sectionScrollTop(key) {
+  const page = document.getElementById('menu-page');
+  const sec  = document.querySelector(`.menu-section[data-key="${key}"]`);
+  if (!page || !sec) return 0;
+  return Math.max(0, page.scrollTop + sec.getBoundingClientRect().top
+    - page.getBoundingClientRect().top - tabBarHeight());
+}
+
+// 往下滑時，頁籤亮在「標題已經滑到頁籤列下面」的最後一區；滑到底就亮最後一區
+// （最後幾區很短的話，永遠滑不到頁籤列那麼高）。
+function syncTabWithScroll() {
+  const page = document.getElementById('menu-page');
+  if (!page || !page.classList.contains('visible') || tabScrollLock) return;
+  const sections = document.querySelectorAll('#menu-content .menu-section');
+  if (!sections.length) return;
+
+  let key = sections[0].getAttribute('data-key');
+  if (page.scrollTop + page.clientHeight >= page.scrollHeight - 2) {
+    key = sections[sections.length - 1].getAttribute('data-key');
+  } else {
+    const line = page.getBoundingClientRect().top + tabBarHeight() + 24;
+    sections.forEach(sec => {
+      if (sec.getBoundingClientRect().top <= line) key = sec.getAttribute('data-key');
+    });
+  }
+  const current = document.querySelector('.tab-btn.active');
+  if (!current || current.getAttribute('data-key') !== key) setActiveTab(key);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const page = document.getElementById('menu-page');
+  if (!page) return;
+  page.addEventListener('scroll', () => {
+    // 點頁籤的平滑捲動還在跑就延長鎖定，停下來之後再交還給捲動
+    if (tabScrollLock) {
+      clearTimeout(tabScrollLockTimer);
+      tabScrollLockTimer = setTimeout(() => { tabScrollLock = false; }, 150);
+      return;
+    }
+    syncTabWithScroll();
+  }, { passive: true });
+});
 
 /* ═════════════════════
    RENDER SECTIONS
@@ -280,11 +340,16 @@ function tempIcons(temp) {
   return out ? `<span class="temp-icons">${out}</span>` : '';
 }
 
-function renderSection(category) {
+// 依頁籤順序把每個分類都畫出來，客人一路往下滑就能看完整份菜單
+function renderMenu() {
   const container = document.getElementById('menu-content');
+  container.innerHTML = tabs.map(tab => renderSection(tab.key)).join('');
+}
+
+function renderSection(category) {
   const items = menuData[category] || [];
   const t = sectionTitles[category] || { en: category, jp: null };
-  let html = `<div class="menu-section active">`;
+  let html = `<div class="menu-section active" data-key="${escAttr(category)}">`;
 
   if (t.en || t.jp) {
     html += `<div class="section-intro">
@@ -340,7 +405,7 @@ function renderSection(category) {
   });
 
   html += `<div class="ornament" style="padding:28px 0">✦ &nbsp; ✦ &nbsp; ✦</div></div>`;
-  container.innerHTML = html;
+  return html;
 }
 
 /* ═══════════════════════════════════════════
@@ -844,18 +909,17 @@ function flushPendingMenu() {
   }, 0);
 }
 
-// 遠端菜單晚到、客人已經在菜單頁時，menu-api.js 套完資料會呼叫這裡重畫目前的分類。
-// initLanding() 會重建頁籤（回到第一個），這裡把原本看的分類和捲動位置還原。
+// 遠端菜單晚到、客人已經在菜單頁時，menu-api.js 套完資料會呼叫這裡重畫整份菜單。
+// initLanding() 會重建頁籤（回到第一個），這裡把捲動位置還原，頁籤再跟著位置重新對上。
 function rerenderMenuPage(prevKey) {
   const menuPage = document.getElementById('menu-page');
   if (!menuPage || !menuPage.classList.contains('visible') || !tabs.length) return;
   const key = tabs.some(t => t.key === prevKey) ? prevKey : tabs[0].key;
   const scrollTop = menuPage.scrollTop;
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.getAttribute('data-key') === key);
-  });
-  renderSection(key);
+  renderMenu();
+  setActiveTab(key);
   menuPage.scrollTop = scrollTop;
+  syncTabWithScroll();
 }
 
 function submitOrder() {
