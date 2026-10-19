@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 11;  // v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 12;  // v12: 訂單加上店家備註 staffNote（v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -58,7 +58,8 @@ var SHEET_HEADERS = [
   'originalItems', 'updatedAt', 'changeLog',
   'freeQty', 'chargedQty', 'freeAmount',
   'paymentStatus',
-  'nickname'
+  'nickname',
+  'staffNote'
 ];
 
 // 客人自己填的自由文字，存進試算表前先修掉頭尾空白並限長度。
@@ -69,6 +70,8 @@ function cleanText(value, maxLength) {
 }
 
 var NICKNAME_MAX = 20;
+// 店家在後台「修改訂單」填的備註（例如「少冰」「外帶」），只有後台寫得進來
+var STAFF_NOTE_MAX = 50;
 
 var VALID_STATUS = ['new', 'making', 'done'];
 
@@ -310,6 +313,8 @@ function handleCreateOrder(payload) {
       orderTotal: chargedTotal(items),
       tableNumber: cleanText(payload.tableNumber, 20),
       nickname: cleanText(payload.nickname, NICKNAME_MAX),
+      // 備註是店家的欄位：客人送的單一律留白，不接受前端帶進來
+      staffNote: payload.manual ? cleanText(payload.staffNote, STAFF_NOTE_MAX) : '',
       // 補登通常是「已經做好給客人了」才在事後登記，所以允許直接指定狀態；
       // 客人自己送的訂單一律從「新訂單」開始，不接受前端指定。
       status: (payload.manual && VALID_STATUS.indexOf(payload.status) !== -1)
@@ -689,6 +694,10 @@ function handleUpdateOrder(payload) {
       paymentStatus: normalizePayment(first[col('paymentStatus')]),
       // 暱稱是客人自己填的，店家改品項時不該動到
       nickname: first[col('nickname')] || '',
+      // 備註：有帶 staffNote 就換成新的（空字串＝清掉），沒帶（舊版後台）就沿用原本的
+      staffNote: Object.prototype.hasOwnProperty.call(payload, 'staffNote')
+        ? cleanText(payload.staffNote, STAFF_NOTE_MAX)
+        : (first[col('staffNote')] || ''),
       // 舊訂單沒有 originalItems 的話，把「這次修改前」的內容補存成原始資料
       originalItems: first[col('originalItems')] || JSON.stringify(oldItems),
       updatedAt: new Date(),
@@ -707,7 +716,10 @@ function handleUpdateOrder(payload) {
     var rows = normalized.map(function (item) { return buildItemRow(ctx, item); });
     sheet.getRange(block.startRow, 1, newCount, SHEET_HEADERS.length).setValues(rows);
 
-    return jsonResponse({ ok: true, orderId: orderId, total: ctx.orderTotal, changeLog: ctx.changeLog });
+    // staffNote 回傳回去：後台靠它判斷 Apps Script 是不是已經部署成會存備註的版本
+    return jsonResponse({
+      ok: true, orderId: orderId, total: ctx.orderTotal, changeLog: ctx.changeLog, staffNote: ctx.staffNote
+    });
   } finally {
     lock.releaseLock();
   }
@@ -850,7 +862,8 @@ function buildItemRow(ctx, item) {
     item.chargedQty,
     item.freeQty * item.unitPrice,
     ctx.paymentStatus,
-    sheetSafeText(ctx.nickname)
+    sheetSafeText(ctx.nickname),
+    sheetSafeText(ctx.staffNote || '')
   ];
 }
 
@@ -966,6 +979,7 @@ function listOrders(scope, dateStr) {
         status: row[col('status')] || 'new',
         paymentStatus: normalizePayment(row[col('paymentStatus')]),
         nickname: row[col('nickname')] || '',
+        staffNote: row[col('staffNote')] || '',
         updatedAt: row[col('updatedAt')] ? toIsoString(row[col('updatedAt')]) : null,
         changeLog: row[col('changeLog')] || '',
         originalItems: parseJsonOrNull(row[col('originalItems')]),

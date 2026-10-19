@@ -191,13 +191,6 @@ function byNewestFirst(a, b) {
   return new Date(b.receivedAt || b.createdAt) - new Date(a.receivedAt || a.createdAt);
 }
 
-// 只用在「已完成」那一區：東西都做完了，剩下要盯的就是誰還沒付錢，
-// 已結帳的沉到最下面。付款狀態相同時一樣是新的在前。
-function byUnpaidFirst(a, b) {
-  const paidDiff = (paymentOf(a) === 'paid' ? 1 : 0) - (paymentOf(b) === 'paid' ? 1 : 0);
-  return paidDiff || byNewestFirst(a, b);
-}
-
 let todayOrders = [];
 let todayOrdersSignature = '';
 
@@ -287,11 +280,12 @@ function buildOrderCard(order) {
     <div class="order-card is-${status} is-${payment}">
       <div class="order-card-head">
         <span class="order-id">${id}</span>
+        <span class="order-sub">${formatOrderClock(order)} · 桌號 ${order.tableNumber ? esc(order.tableNumber) : '—'}${
+          order.staffNote ? ` <span class="order-note">${esc(order.staffNote)}</span>` : ''}${
+          order.nickname ? ` · ${esc(order.nickname)}` : ''}</span>
         <span class="order-badge is-${status}">${ORDER_STATUS[status].dot} ${ORDER_STATUS[status].label}</span>
         <span class="pay-badge is-${payment}">${PAYMENT_STATUS[payment].dot} ${PAYMENT_STATUS[payment].label}</span>
       </div>
-      <div class="order-sub">${formatOrderClock(order)} · 桌號 ${order.tableNumber ? esc(order.tableNumber) : '—'}${
-        order.nickname ? ` · ${esc(order.nickname)}` : ''}</div>
       <div class="order-items">${itemRows}</div>
       <div class="order-foot">
         <div class="order-total-line">共 ${totalQty} 件${
@@ -309,13 +303,13 @@ function paintTodayOrders() {
   const sorted = todayOrders.slice().sort(byNewestFirst);
 
   const groups = ['new', 'making', 'done'].map(key => {
-    let list = sorted.filter(o => (ORDER_STATUS[o.status] ? o.status : 'new') === key);
+    const list = sorted.filter(o => (ORDER_STATUS[o.status] ? o.status : 'new') === key);
     // 新訂單和製作中維持時間順序 —— 那兩區是照著順序做事的，
-    // 被付款狀態打亂反而會漏掉先來的單。已完成的才把已結帳的沉到下面。
-    if (key === 'done') list = list.sort(byUnpaidFirst);
-    const body = list.length
+    // 被付款狀態打亂反而會漏掉先來的單。
+    let body = list.length
       ? list.map(buildOrderCard).join('')
       : '<div class="order-group-empty">目前沒有</div>';
+    if (key === 'done' && list.length) body = doneGroupBody(list);
     return `
       <div class="order-group">
         <div class="order-group-head">
@@ -327,6 +321,35 @@ function paintTodayOrders() {
   }).join('');
 
   wrap.innerHTML = groups;
+}
+
+/* 已完成這一區：做好了還沒收錢的單照常攤開（最不能漏收），
+   做好也收過錢的單已經不用處理了，收成一行「已結帳 N 筆」，點了才展開 ——
+   不然營業到下午會累積一長串，把要處理的單往下推。
+   展開／收合只記在這台裝置，重新整理也維持；那些單在下面的訂單紀錄一樣看得到。 */
+const DONE_PAID_OPEN_KEY = 'kigoDonePaidOpen';
+
+function donePaidOpen() {
+  try { return localStorage.getItem(DONE_PAID_OPEN_KEY) === '1'; } catch (e) { return false; }
+}
+
+function toggleDonePaid() {
+  try { localStorage.setItem(DONE_PAID_OPEN_KEY, donePaidOpen() ? '0' : '1'); } catch (e) {}
+  paintTodayOrders();
+}
+
+function doneGroupBody(list) {
+  const unpaid = list.filter(o => paymentOf(o) !== 'paid');
+  const paid = list.filter(o => paymentOf(o) === 'paid');
+  let html = unpaid.map(buildOrderCard).join('');
+  if (paid.length) {
+    const open = donePaidOpen();
+    html += `<button type="button" class="done-paid-toggle" onclick="toggleDonePaid()" aria-expanded="${open}">
+        已結帳 ${paid.length} 筆 <span class="done-paid-arrow">${open ? '▾' : '▸'}</span>
+      </button>`;
+    if (open) html += paid.map(buildOrderCard).join('');
+  }
+  return html;
 }
 
 // Apps Script 有時要 5~10 秒才回應。如果照樣每 4 秒再發一次，
@@ -627,6 +650,9 @@ function openEditOrder(orderId) {
     // 暱稱是客人自己填的，店家不應該在這裡改掉客人寫的東西。
     paymentStatus: paymentOf(order),
     nickname: order.nickname || '',
+    staffNote: order.staffNote || '',
+    // 原本的備註，儲存時拿來判斷這次有沒有改到備註
+    originalStaffNote: order.staffNote || '',
     changeLog: order.changeLog || '',
     items: (order.items || []).map(i => ({
       name: i.name,
@@ -657,10 +683,16 @@ function openManualOrder() {
     // 補登通常是「錢已經收了才回頭記帳」，預設已結帳，要改再改
     orderPayment: 'paid',
     tableNumber: null,
+    staffNote: '',
     changeLog: '',
     items: [{ name: '', category: '', temp: '', quantity: 1, freeQty: 0, unitPrice: 0 }]
   };
   showEditModal();
+}
+
+// 備註邊打邊記，不重畫視窗（重畫會讓輸入框失去游標）
+function setEditNote(value) {
+  if (editingOrder) editingOrder.staffNote = value;
 }
 
 function setManualDate(value) {
@@ -776,8 +808,16 @@ function paintEditOrder() {
            PAYMENT_STATUS[editingOrder.paymentStatus].dot} ${PAYMENT_STATUS[editingOrder.paymentStatus].label}
        </div>${changeLog}`;
 
+  // 店家備註：填了會顯示在今日訂單卡的桌號後面，留白就不顯示
+  const noteField = `
+    <label class="edit-note">備註
+      <input type="text" maxlength="50" placeholder="例如：少冰、外帶、晚點出"
+             value="${esc(editingOrder.staffNote || '')}" oninput="setEditNote(this.value)">
+    </label>`;
+
   body.innerHTML = `
     ${header}
+    ${noteField}
     ${rows}
     <button type="button" class="btn-add" onclick="addEditItem()">＋ 新增品項</button>`;
 
@@ -1001,6 +1041,7 @@ async function saveOrderEdit() {
 
   // 金額只算收費數量，招待不計入
   const total = items.reduce((sum, i) => sum + i.unitPrice * (i.quantity - (i.freeQty || 0)), 0);
+  const staffNote = String(editingOrder.staffNote || '').trim().slice(0, 50);
 
   if (editingOrder.isManual) {
     const orderDate = editingOrder.orderDate;
@@ -1021,6 +1062,7 @@ async function saveOrderEdit() {
         status,
         paymentStatus,
         tableNumber: null,
+        staffNote,
         total,
         items,
         meta: { pageUrl: location.href }
@@ -1065,7 +1107,8 @@ async function saveOrderEdit() {
     ? localChangeLog(order.changeLog || '', order.items || [], patched)
     : '';
 
-  const patch = { items: patched, total, changeLog };
+  const noteChanged = staffNote !== (editingOrder.originalStaffNote || '');
+  const patch = { items: patched, total, changeLog, staffNote };
   mergePendingOp(key, patch);
   patchLoadedOrders(orderId, patch);
   repaintOrders();
@@ -1073,9 +1116,13 @@ async function saveOrderEdit() {
   showToast('訂單已更新');   // 畫面已經是新的了，提示不用等伺服器回應
 
   await queueWrite(async () => {
-    const res = await apiPostOrder({ action: 'updateOrder', orderId, items });
+    const res = await apiPostOrder({ action: 'updateOrder', orderId, items, staffNote });
     if (res && res.ok) {
       clearPendingOp(key, patch);
+      // 舊版 Apps Script 不認得 staffNote：品項照樣存好了，但備註會被丟掉，要講清楚
+      if (noteChanged && res.staffNote === undefined) {
+        showToast('訂單已更新，但備註沒存到：請重新部署 Apps Script');
+      }
       refreshAfterWrite();
       return;
     }
@@ -1087,7 +1134,9 @@ async function saveOrderEdit() {
       resyncOnNextPoll();
       return;
     }
-    if (probe.order && Number(probe.order.total) === Number(total)) {
+    // 只改備註時金額不會變，所以備註也要一起比，才分得出這次到底有沒有寫進去
+    if (probe.order && Number(probe.order.total) === Number(total) &&
+        String(probe.order.staffNote || '') === staffNote) {
       clearPendingOp(key, patch);
       refreshAfterWrite();
       return;
@@ -1180,7 +1229,7 @@ function paintHistory() {
       }).join('、');
       const id = esc(order.orderId);
       return `
-        <div class="history-row">
+        <div class="history-row is-${payment}">
           <div class="history-main">
             <div class="history-head">
               <span class="history-id">${id}</span>

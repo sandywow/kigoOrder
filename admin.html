@@ -518,7 +518,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 12px;
+      font-size: 13px;
       letter-spacing: 0.16em;
       color: var(--ink-soft);
       padding-bottom: 8px;
@@ -527,11 +527,11 @@
     }
     .order-group-count {
       font-family: 'DM Serif Display', serif;
-      font-size: 13px;
+      font-size: 14px;
       color: var(--caramel);
     }
     .order-group-empty {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--ink-faint);
       opacity: 0.6;
       padding: 2px 0 4px;
@@ -546,6 +546,25 @@
       overflow: hidden;
     }
     .order-card:last-child { margin-bottom: 0; }
+    /* 已完成區裡「已結帳 N 筆」的收合列（admin-orders.js doneGroupBody） */
+    .done-paid-toggle {
+      display: block;
+      width: 100%;
+      margin: 0 0 10px;
+      padding: 10px 14px;
+      border: 1px dashed var(--beige);
+      border-radius: 8px;
+      background: none;
+      color: var(--ink-faint);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-align: left;
+      cursor: pointer;
+    }
+    .done-paid-toggle:hover { border-color: var(--caramel-lt); color: var(--caramel); }
+    .done-paid-toggle:last-child { margin-bottom: 0; }
+    .done-paid-arrow { float: right; }
     .order-card.is-new {
       border-color: #E0A93B;
       border-left-color: #E0A93B;
@@ -563,16 +582,18 @@
       align-items: baseline;
       justify-content: space-between;
       gap: 10px;
-      padding: 11px 14px 8px;
+      padding: 11px 14px 10px;
+      /* 單號、時間桌號、兩個 badge 同一排；窄螢幕放不下時整組往下換行，不會擠爛 */
+      flex-wrap: wrap;
     }
     .order-id {
       font-family: 'DM Serif Display', serif;
-      font-size: 15px;
+      font-size: 17px;
       letter-spacing: 0.08em;
       color: var(--ink);
     }
     .order-badge {
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.12em;
       padding: 3px 10px;
       border-radius: 20px;
@@ -587,7 +608,7 @@
 
     /* 付款狀態用外框樣式，跟製作狀態的實心 badge 一眼分得開 */
     .pay-badge {
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.1em;
       padding: 2px 9px;
       border-radius: 20px;
@@ -597,11 +618,22 @@
     .pay-badge.is-unpaid { border-color: var(--beige); color: var(--ink-faint); }
     .pay-badge.is-paid   { border-color: #6E9E6E; color: #4F7A4F; background: rgba(110,158,110,0.1); }
 
+    /* 時間 · 桌號 · 暱稱，跟在單號後面同一排 */
     .order-sub {
-      padding: 0 14px 10px;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--ink-faint);
       letter-spacing: 0.06em;
+    }
+    /* 店家備註：接在桌號後面，用淡黃底的小標籤，忙的時候一眼看得到 */
+    .order-note {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 1px 8px;
+      border-radius: 4px;
+      background: #FFF0C9;
+      color: #7A5A1E;
+      font-size: 13px;
+      letter-spacing: 0.04em;
     }
     .order-items {
       padding: 10px 14px;
@@ -614,16 +646,16 @@
     /* grid 固定三個欄寬，「單價×數量」才會每一列都停在同一個中間位置並對齊 */
     .order-item-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 96px 64px;
+      grid-template-columns: minmax(0, 1fr) 108px 72px;
       align-items: baseline;
       gap: 8px;
-      font-size: 13px;
+      font-size: 15px;
     }
     .order-item-name { color: var(--ink); min-width: 0; }
-    .order-item-temp { color: var(--caramel); font-size: 11px; }
+    .order-item-temp { color: var(--caramel); font-size: 12px; }
     .order-item-calc {
       color: var(--ink-faint);
-      font-size: 12px;
+      font-size: 15px;
       white-space: nowrap;
       text-align: center;
     }
@@ -636,10 +668,10 @@
       padding: 10px 14px;
       flex-wrap: wrap;
     }
-    .order-total-line { font-size: 12px; color: var(--ink-faint); }
+    .order-total-line { font-size: 13px; color: var(--ink-faint); }
     .order-item-free {
       display: inline-block;
-      font-size: 10px;
+      font-size: 11px;
       background: #7A7D5C;
       color: #fff;
       padding: 1px 6px;
@@ -651,12 +683,14 @@
     .order-free-note { color: #7A7D5C; margin-left: 4px; }
     .order-total-amt {
       font-family: 'DM Serif Display', serif;
-      font-size: 16px;
+      font-size: 19px;
       color: var(--caramel);
       margin-left: 6px;
     }
     /* 加了結帳鍵後一張卡最多會有三顆按鈕，窄螢幕要能換行不然會被擠出卡片外 */
     .order-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    /* 訂單卡上的按鈕跟著卡片文字放大，平板上比較好按；其他地方的 .btn-order 維持原樣 */
+    .order-card .btn-order { font-size: 13px; padding: 8px 15px; }
     .btn-order {
       border: 1px solid var(--beige);
       background: none;
@@ -799,6 +833,29 @@
     }
     .manual-fields input:focus, .manual-fields select:focus { border-color: var(--caramel-lt); }
 
+    /* 修改訂單／補登視窗的備註欄，樣式跟補登的欄位同一套 */
+    .edit-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--ink-faint);
+      margin: 4px 0 8px;
+    }
+    .edit-note input {
+      flex: 1;
+      min-width: 0;
+      padding: 7px 10px;
+      border: 1px solid var(--beige);
+      border-radius: 5px;
+      background: var(--white);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 14px;
+      color: var(--ink);
+      outline: none;
+    }
+    .edit-note input:focus { border-color: var(--caramel-lt); }
+
     .edit-row.has-free { border-color: #7A7D5C; background: #FAFBF5; }
     .edit-row-free {
       display: flex;
@@ -894,7 +951,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
-      padding: 9px 0;
+      padding: 9px 10px;
       border-bottom: 1px dashed var(--parchment);
     }
     .history-main { min-width: 0; flex: 1; }
@@ -926,6 +983,9 @@
     .history-status.is-making { background: #5384B5; }
     .history-status.is-done   { background: #6E9E6E; }
     /* 未結帳的金額還沒進口袋，用刪節線淡化，掃一眼就知道哪幾筆還沒收 */
+    /* 整列淡淡上色，一眼看出哪幾筆還沒結帳：已結帳淡綠、未結帳淡紅 */
+    .history-row.is-paid   { background: rgba(110,158,110,0.10); }
+    .history-row.is-unpaid { background: rgba(185,64,64,0.08); }
     .history-amt.is-unpaid { color: var(--ink-faint); text-decoration: line-through; opacity: 0.75; }
 
     /* ── 統計 ── */
