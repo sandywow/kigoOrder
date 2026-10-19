@@ -39,10 +39,108 @@ function loadState() {
     }
   }
   if (!usedStored) state = defaults;
+  // 去 Sheets 拿真正的原始列由 startAdmin() 負責：要先過了 Token 鎖定畫面才讀
+}
 
+/* ═══════════════════════════════════════════════════════════
+   後台鎖定畫面
+
+   沒有 Token 的人打開後台，只會看到一個輸入 Token 的畫面，
+   首頁設定、菜單管理、訂單這些分頁一律不顯示。Token 會先打一次
+   ?action=list（伺服器驗 token）確認正確才放行，亂打的進不來。
+
+   ⚠ 這只是「畫面」上的門：網頁本身是公開的，懂程式的人還是看得到原始碼。
+     真正擋住資料的是 Apps Script 的 token 檢查 —— 沒有正確 token，
+     訂單、未公開的菜單內容一樣讀不到、什麼也改不了。
+   ═══════════════════════════════════════════════════════════ */
+var adminStarted = false;
+
+// 頁面載入時呼叫：這台裝置存過 Token 就直接進後台（背景再確認一次），沒有就顯示鎖定畫面
+function bootAdmin() {
+  loadState();
+  // 還沒設定 API 網址（全新安裝）就沒辦法驗證，也沒有資料可保護，直接放行讓店家去填網址
+  if (!adminMenuEndpoint()) { startAdmin(); return; }
+
+  var stored = menuWriteTokenValue();
+  if (!stored) { showAdminLock(''); return; }
+
+  startAdmin();
+  // 存著的 Token 可能已經被換掉（重新產生過），確認一下；失效就鎖回去
+  verifyAdminToken(stored).then(function (result) {
+    if (result === 'unauthorized') {
+      clearMenuWriteToken();
+      showAdminLock('這台裝置存的 Token 已經失效，請重新輸入');
+    }
+  });
+}
+
+function startAdmin() {
+  adminStarted = true;
+  document.body.classList.remove('admin-locked');
   // 本機資料先就位（畫面立刻可用），再背景去 Sheets 拿真正的原始列。
   // Apps Script 常要好幾秒，不能讓後台開著空白等它。
   refreshStateFromSheets();
+  initNotepad();
+  initStats();
+  populateLanding();
+  buildCatTabs();
+  buildTabsEditor();
+  buildSectionTitlesEditor();
+}
+
+function showAdminLock(message) {
+  document.body.classList.add('admin-locked');
+  var msg = document.getElementById('admin-lock-msg');
+  if (msg) msg.textContent = message || '';
+  var input = document.getElementById('admin-lock-input');
+  if (input) {
+    input.value = '';
+    setTimeout(function () { input.focus(); }, 0);
+  }
+}
+
+// 回傳 'ok' | 'unauthorized' | 'not-configured' | 'error'（連不上或回應看不懂）
+function verifyAdminToken(token) {
+  var base = adminMenuEndpoint();
+  if (!base || typeof fetch !== 'function') return Promise.resolve('error');
+  var url = base + (base.indexOf('?') >= 0 ? '&' : '?') +
+    'action=list&scope=today&token=' + encodeURIComponent(token);
+  return fetch(url, { cache: 'no-store' })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data && data.ok) return 'ok';
+      if (data && data.error === 'unauthorized') return 'unauthorized';
+      if (data && data.error === 'token not configured') return 'not-configured';
+      return 'error';
+    })
+    .catch(function () { return 'error'; });
+}
+
+function submitAdminLock(e) {
+  if (e) e.preventDefault();
+  var input = document.getElementById('admin-lock-input');
+  var button = document.getElementById('admin-lock-btn');
+  var msg = document.getElementById('admin-lock-msg');
+  var token = String(input.value || '').trim();
+  if (!token) return;
+
+  button.disabled = true;
+  msg.textContent = '確認中…';
+  verifyAdminToken(token).then(function (result) {
+    button.disabled = false;
+    if (result === 'ok') {
+      setMenuWriteToken(token);
+      // 開頁後才被鎖回來的（Token 中途失效）：重新整理最乾淨，所有分頁照新 Token 重抓
+      if (adminStarted) { location.reload(); return; }
+      startAdmin();
+      return;
+    }
+    msg.textContent =
+      result === 'unauthorized'   ? 'Token 不正確，請再確認一次' :
+      result === 'not-configured' ? 'Apps Script 還沒設定 Token（指令碼屬性 MENU_WRITE_TOKEN）' :
+                                    '連不上伺服器，請確認網路後再試一次';
+    input.select();
+  });
 }
 
 function saveConfig() {
@@ -250,8 +348,8 @@ function refreshStateFromSheets() {
     .then(function (res) { return res.json(); })
     .then(function (raw) {
       if (raw && raw.ok === false && raw.error === 'unauthorized') {
-        clearMenuWriteToken();   // 存著的那份沒用了，重新整理時會再問
-        showToast('後台 Token 不正確，菜單沒有讀到；請重新整理後再輸入一次');
+        clearMenuWriteToken();   // 存著的那份沒用了
+        showAdminLock('這台裝置存的 Token 已經失效，請重新輸入');
         return;
       }
       if (raw && raw.ok === false && raw.error === 'token not configured') {
@@ -567,15 +665,11 @@ function clearMenuWriteToken() {
   return '';
 }
 
-// 只在還沒有 token 的時候問一次。按取消就回空字串，這一輪不送出。
+// 用到 token 卻沒有（例如中途被判定失效、清掉了）：改成整個鎖回輸入畫面，
+// 這一輪先回空字串不送出。輸入並驗證成功後會重新整理，所有分頁照新 Token 重抓。
 function askMenuWriteToken() {
-  if (typeof window === 'undefined' || typeof window.prompt !== 'function') return '';
-  var entered = window.prompt(
-    '請輸入後台 Token（Apps Script 專案屬性 MENU_WRITE_TOKEN 的值）。\n' +
-    '儲存菜單、讀取與管理訂單都要用到。\n' +
-    '只會問這一次，之後存在這台裝置的瀏覽器裡。');
-  if (entered === null) return '';
-  return setMenuWriteToken(entered);
+  showAdminLock('請輸入後台 Token');
+  return '';
 }
 
 /* ── 進入點 ── */

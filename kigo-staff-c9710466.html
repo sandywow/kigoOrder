@@ -9,8 +9,7 @@
   <link rel="icon" type="image/png" href="src/favicon.png">
   <link rel="apple-touch-icon" href="src/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400&family=Noto+Serif+TC:wght@300;400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
-  <style>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400&family=Noto+Serif+TC:wght@300;400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">  <style>
     :root {
       --cream: #F7F3EC; --parchment: #EDE5D8; --beige: #D9CFC0;
       --caramel: #8B5E3C; --caramel-lt: #B8845A;
@@ -46,6 +45,20 @@
       font-size: 17px;
       letter-spacing: 0.18em;
     }
+    /* 「享·奇果」直接用 logo 上的手寫字（src/brand-wordmark.png，從 logo 取出的透明圖）。
+       圖當遮罩用，顏色跟著文字顏色走：標題列是米白、鎖定畫面是咖啡色，同一張圖兩邊共用 */
+    .brand-mark {
+      display: inline-block;
+      /* 圖裡的字大約佔圖高的 2/3，1.9em 時字比旁邊的「後台」大一點點 */
+      height: 1.9em;
+      aspect-ratio: 505 / 180;
+      vertical-align: middle;
+      margin-right: 0.35em;
+      background-color: currentColor;
+      -webkit-mask: url("src/brand-wordmark.png") center / contain no-repeat;
+              mask: url("src/brand-wordmark.png") center / contain no-repeat;
+    }
+    .brand-title { display: inline-flex; align-items: center; }
     .preview-link {
       font-size: 12px;
       color: rgba(247,243,236,0.7);
@@ -134,6 +147,61 @@
       border-bottom-color: var(--caramel);
       background: var(--cream);
     }
+
+    /* ── Token 鎖定畫面（admin-data.js 的 bootAdmin / showAdminLock）──
+       鎖住時只留這一塊，其他所有東西（分頁、訂單、彈窗、提示）都不顯示 */
+    #admin-lock { display: none; }
+    body.admin-locked > *:not(#admin-lock):not(script) { display: none !important; }
+    body.admin-locked #admin-lock {
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .admin-lock-card {
+      width: 100%;
+      max-width: 340px;
+      background: var(--white);
+      border: 1px solid var(--beige);
+      border-radius: 10px;
+      padding: 28px 24px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .admin-lock-title {
+      font-family: 'Noto Serif TC', serif;
+      font-size: 18px;
+      letter-spacing: 0.12em;
+      color: var(--caramel);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .admin-lock-label { font-size: 13px; color: var(--ink-faint); letter-spacing: 0.06em; }
+    #admin-lock-input {
+      padding: 10px 12px;
+      border: 1px solid var(--beige);
+      border-radius: 6px;
+      background: var(--cream);
+      font-size: 15px;
+      color: var(--ink);
+      outline: none;
+    }
+    #admin-lock-input:focus { border-color: var(--caramel-lt); background: #fff; }
+    #admin-lock-btn {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: var(--caramel);
+      color: var(--cream);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 14px;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+    }
+    #admin-lock-btn:disabled { opacity: 0.6; cursor: default; }
+    .admin-lock-msg { min-height: 1.4em; font-size: 13px; color: var(--danger); text-align: center; }
 
     /* ── Panels ── */
     .admin-panel { display: none; padding: 20px 16px; }
@@ -1056,12 +1124,23 @@
     .stat-scroll { overflow-x: auto; }
   </style>
 </head>
-<body>
+<!-- 一開始就是鎖住的，確認有 Token 才拿掉 admin-locked，後台內容不會先閃出來 -->
+<body class="admin-locked">
+
+<div id="admin-lock">
+  <form class="admin-lock-card" onsubmit="submitAdminLock(event)">
+    <div class="admin-lock-title"><span class="brand-title"><span class="brand-mark" role="img" aria-label="享·奇果"></span>後台</span></div>
+    <label class="admin-lock-label" for="admin-lock-input">請輸入後台 Token</label>
+    <input id="admin-lock-input" type="password" autocomplete="current-password" spellcheck="false">
+    <button id="admin-lock-btn" type="submit">進入後台</button>
+    <div id="admin-lock-msg" class="admin-lock-msg"></div>
+  </form>
+</div>
 
 <!-- ═══ Header ═══ -->
 <header class="admin-header">
   <div class="admin-header-left">
-    <div class="admin-title">◆ 奇果後台</div>
+    <div class="admin-title brand-title"><span class="brand-mark" role="img" aria-label="享·奇果"></span>後台</div>
     <a class="preview-link" href="index.html" target="_blank">預覽首頁 ↗</a>
   </div>
   <div style="display:flex;gap:8px">
@@ -1416,15 +1495,8 @@
 <script src="js/admin/admin-orders.js"></script>
 <script src="js/admin/admin-stats.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
-  initNotepad();
-  initStats();
-  populateLanding();
-  buildCatTabs();
-  buildTabsEditor();
-  buildSectionTitlesEditor();
-});
+// 先過 Token 鎖定畫面才初始化後台（js/admin/admin-data.js 的 bootAdmin）
+document.addEventListener('DOMContentLoaded', bootAdmin);
 </script>
 </body>
 </html>
