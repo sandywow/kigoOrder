@@ -6,7 +6,10 @@
    ═════════════════════════════ */
 let statsScope = 'today';
 let statsOrders = [];
-let statsFetchInFlight = false;
+// 統計是「最後一次要求的範圍」說了算：切範圍很快時，舊範圍的回應可能比新範圍晚回來，
+// 每次要求都編號，回來時不是最新那一次就丟掉，數字才不會配到錯的日期。
+let statsRequestSeq = 0;
+let statsInFlightKey = null;   // 正在抓的範圍；同一個範圍連按重新整理不重複送
 
 function switchStatsScope(scope, btn) {
   statsScope = scope;
@@ -79,28 +82,37 @@ async function renderSalesStats() {
       '<div class="history-empty">尚未設定訂單 API，無法讀取統計資料。</div>';
     return;
   }
-  if (statsFetchInFlight) return;
-
   const dateValue = document.getElementById('stats-date').value;
   if (statsScope === 'date' && !dateValue) return;
 
-  const scopeDate = statsScope === 'date' ? dateValue : null;
+  const scope = statsScope;
+  const scopeDate = scope === 'date' ? dateValue : null;
+  const requestKey = scope + '|' + (scopeDate || '');
+  if (statsInFlightKey === requestKey) return;
+  const seq = ++statsRequestSeq;
+  statsInFlightKey = requestKey;
 
   // 先用這台裝置上次存的同一個範圍畫出來，背景再更新（快取說明見 admin-orders.js）
-  const cached = readOrderCache(statsScope, scopeDate);
+  const cached = readOrderCache(scope, scopeDate);
   if (cached) {
     statsOrders = cached;
     paintSalesStats();
     document.getElementById('stat-items').insertAdjacentHTML('afterbegin', orderCacheNoteHtml());
+  } else {
+    // 沒有快取就先清成讀取中，不要讓上一個範圍的數字留在畫面上被當成這個範圍的
+    statsOrders = [];
+    paintSalesStats();
+    document.getElementById('stat-items').innerHTML = '<div class="history-empty">讀取中…</div>';
   }
 
-  statsFetchInFlight = true;
   let orders;
   try {
-    orders = await apiGetOrders(statsScope, scopeDate);
+    orders = await apiGetOrders(scope, scopeDate);
   } finally {
-    statsFetchInFlight = false;
+    if (seq === statsRequestSeq) statsInFlightKey = null;
   }
+  // 等待途中又切了範圍：這份是舊範圍的資料，不能畫上去
+  if (seq !== statsRequestSeq) return;
   if (!orders) {
     if (cached && !orderAuthProblem) {
       // 留著上次的數字，但要講清楚不是最新的
