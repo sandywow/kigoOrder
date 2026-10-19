@@ -100,7 +100,7 @@ function markAdminEdited(e) {
   adminEdited = true;
 }
 
-// 菜單還沒從試算表讀回來前，先把會寫回菜單的三頁鎖住（admin.html 的 body.menu-loading）。
+// 菜單還沒從試算表讀回來前，先把會寫回菜單的三頁鎖住（後台頁 kigo-staff-c9710466.html 的 body.menu-loading）。
 // 讀回來之前動到欄位，讀到的資料就不能套用，這次開頁也就存不了菜單 —— 乾脆不讓它發生。
 // 讀取失敗或等太久就解鎖，退回原本「用本機資料編輯」的行為。
 var MENU_LOADING_MAX_MS = 20000;
@@ -145,7 +145,7 @@ function bySheetSortOrder(a, b) {
 
 /* ── 圖片的路徑格式（海報輪播與菜單品項共用） ──
 
-   後台的圖片欄填的是相對路徑（config.js 的預設值與 admin.html / admin-menu.js
+   後台的圖片欄填的是相對路徑（config.js 的預設值與後台頁 kigo-staff-c9710466.html / admin-menu.js
    的 placeholder 都是 src/BANNER FISH-03.jpg、src/photo.jpg），不是完整網址。
 
    但 Banners / Items 工作表的儲存格存的是 Menu.gs 的 menuResolveImage 看得懂的值：
@@ -234,12 +234,30 @@ function refreshStateFromSheets() {
     return;
   }
 
-  var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'action=menuRaw';
+  // menuRaw 含下架品項、備註等還沒公開的內容，Apps Script 要求帶 token（v13 起）。
+  // 這台裝置還沒存 token 就在開頁時問一次；按取消就沿用本機資料（這次開頁存不了菜單）。
+  var token = menuWriteTokenValue() || askMenuWriteToken();
+  if (!token) {
+    console.warn('[admin] 沒有後台 Token，讀不到試算表的菜單，沿用 config.js / localStorage 的資料');
+    return;
+  }
+
+  var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'action=menuRaw' +
+    '&token=' + encodeURIComponent(token);
 
   setMenuLoading(true);
   fetch(url, { cache: 'no-store' })
     .then(function (res) { return res.json(); })
     .then(function (raw) {
+      if (raw && raw.ok === false && raw.error === 'unauthorized') {
+        clearMenuWriteToken();   // 存著的那份沒用了，重新整理時會再問
+        showToast('後台 Token 不正確，菜單沒有讀到；請重新整理後再輸入一次');
+        return;
+      }
+      if (raw && raw.ok === false && raw.error === 'token not configured') {
+        showToast('Apps Script 還沒設定 Token（指令碼屬性 MENU_WRITE_TOKEN）');
+        return;
+      }
       // 工作表還沒建好、或 Apps Script 還沒重新部署時，?action=menuRaw 會落到
       // 預設的 "Kigo order API is running." 那則訊息 —— 那不是菜單資料，不能用。
       if (!raw || raw.ok === false || !Array.isArray(raw.items) || !Array.isArray(raw.categories)) {

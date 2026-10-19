@@ -29,7 +29,7 @@
  * 共同菜單資料（menuWeb / orderWeb 共用）實作在另一個檔案 Menu.gs：
  *   GET  ?action=menu&site=menuWeb   → 已組裝好的菜單（menuData/landingData/tabs/sectionTitles）
  *   GET  ?action=menu&site=orderWeb  → 同上，套用 orderWeb 的分站設定
- *   GET  ?action=menuRaw             → 菜單五張工作表的原始列（後台編輯用）
+ *   🔒 GET  ?action=menuRaw&token=…  → 菜單五張工作表的原始列（後台編輯用）
  *
  * 菜單寫入實作在另一個檔案 MenuWrite.gs：
  *   POST {action:'saveMenu', site, tables:{items,itemCategories,categories,settings,banners}}
@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 12;  // v12: 訂單加上店家備註 staffNote（v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 13;  // v13: menuRaw 也要 token（v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -246,6 +246,9 @@ function doGet(e) {
       return jsonResponse(buildMenuPayloadCached(params.site));
     }
     if (params.action === 'menuRaw') {
+      // 原始列含下架品項、備註欄等還沒公開的內容，只給後台看
+      var deniedRaw = orderAdminAuthorize(params.token);
+      if (deniedRaw) return jsonResponse(deniedRaw);
       return jsonResponse(buildMenuRawPayload());
     }
     return jsonResponse({
