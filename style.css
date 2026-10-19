@@ -743,6 +743,12 @@ body::before {
   letter-spacing: 0.28em;
   margin-top: 6px;
 }
+/* 分類警語：比副標小、字距收窄，一行放得下 */
+.section-intro p.section-note {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  margin-top: 8px;
+}
 
 /* ── Unified menu item ── */
 .menu-item {

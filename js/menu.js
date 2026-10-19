@@ -340,6 +340,11 @@ function tempIcons(temp) {
   return out ? `<span class="temp-icons">${out}</span>` : '';
 }
 
+// 分類標題底下固定顯示的一行說明（酒類依法要標的警語）
+const SECTION_NOTES = {
+  cocktail: '※飲酒過量，有害健康。未滿十八歲禁止飲酒。'
+};
+
 // 依頁籤順序把每個分類都畫出來，客人一路往下滑就能看完整份菜單
 function renderMenu() {
   const container = document.getElementById('menu-content');
@@ -351,10 +356,12 @@ function renderSection(category) {
   const t = sectionTitles[category] || { en: category, jp: null };
   let html = `<div class="menu-section active" data-key="${escAttr(category)}">`;
 
-  if (t.en || t.jp) {
+  const note = SECTION_NOTES[category];
+  if (t.en || t.jp || note) {
     html += `<div class="section-intro">
       ${t.en ? `<h3>${t.en}</h3>` : ''}
       ${t.jp ? `<p>${t.jp}</p>` : ''}
+      ${note ? `<p class="section-note">${escHtml(note)}</p>` : ''}
     </div>`;
   }
 
