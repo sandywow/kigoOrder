@@ -419,6 +419,7 @@ function menuSeedCategories() {
     ['coffee',   '咖啡',     'Coffee',              '咖啡',         20, true,  true, 'both'],
     ['tea',      '茶飲',     'Tea',                 '茶飲',         30, true,  true, 'both'],
     ['noncafe',  '無咖啡因', 'Non-Caffeinated',     '無咖啡因飲品', 40, true,  true, 'both'],
+    ['cocktail', '酒精飲品', 'Cocktail',            '酒精飲品',     45, true,  true, 'both'],
     ['dessert',  '甜點',     'Pâtisserie',          '手作．甜點',   50, false, true, 'both']
   ];
 }
