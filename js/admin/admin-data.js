@@ -87,11 +87,29 @@ var adminEdited = false;
 document.addEventListener('input',  markAdminEdited, true);
 document.addEventListener('change', markAdminEdited, true);
 
+// 會寫回菜單的只有這三頁。訂單管理、修改訂單視窗、統計、便籤的輸入框都不算菜單編輯 ——
+// 以前全部都算，開頁幾秒內改一下訂單，這次開頁就再也存不了菜單。
+var MENU_EDIT_PANELS = '#panel-landing, #panel-menu, #panel-other';
+
 function markAdminEdited(e) {
-  // 便籤與統計的輸入框不算菜單編輯，它們各自存自己的 localStorage
-  var id = (e.target && e.target.id) || '';
+  var el = e.target;
+  if (!el || !el.closest || !el.closest(MENU_EDIT_PANELS)) return;
+  // 其他設定裡的便籤與統計欄位不算菜單編輯，它們各自存自己的 localStorage
+  var id = el.id || '';
   if (id === 'notepad-text' || id === 'stats-date' || id === 'stat-opening-cash') return;
   adminEdited = true;
+}
+
+// 菜單還沒從試算表讀回來前，先把會寫回菜單的三頁鎖住（admin.html 的 body.menu-loading）。
+// 讀回來之前動到欄位，讀到的資料就不能套用，這次開頁也就存不了菜單 —— 乾脆不讓它發生。
+// 讀取失敗或等太久就解鎖，退回原本「用本機資料編輯」的行為。
+var MENU_LOADING_MAX_MS = 20000;
+var menuLoadingTimer = null;
+
+function setMenuLoading(on) {
+  document.body.classList.toggle('menu-loading', on);
+  clearTimeout(menuLoadingTimer);
+  if (on) menuLoadingTimer = setTimeout(function () { setMenuLoading(false); }, MENU_LOADING_MAX_MS);
 }
 
 /* ── 跟 GAS 對齊的小工具 ──
@@ -218,6 +236,7 @@ function refreshStateFromSheets() {
 
   var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'action=menuRaw';
 
+  setMenuLoading(true);
   fetch(url, { cache: 'no-store' })
     .then(function (res) { return res.json(); })
     .then(function (raw) {
@@ -246,7 +265,8 @@ function refreshStateFromSheets() {
     })
     .catch(function (err) {
       console.warn('[admin] 讀取 menuRaw 失敗，沿用 config.js / localStorage 的資料', err);
-    });
+    })
+    .then(function () { setMenuLoading(false); });
 }
 
 function applyMenuRaw(raw) {

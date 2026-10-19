@@ -137,6 +137,27 @@
     .admin-panel { display: none; padding: 20px 16px; }
     .admin-panel.active { display: block; }
 
+    /* 菜單從試算表讀回來前，會寫回菜單的三頁先鎖住（admin-data.js 的 setMenuLoading） */
+    body.menu-loading #panel-landing::before,
+    body.menu-loading #panel-menu::before,
+    body.menu-loading #panel-other::before {
+      content: '正在讀取試算表的最新菜單，讀完就可以編輯…';
+      display: block;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      background: var(--parchment);
+      color: var(--ink-faint);
+      font-size: 13px;
+      text-align: center;
+    }
+    body.menu-loading #panel-landing > *,
+    body.menu-loading #panel-menu > *,
+    body.menu-loading #panel-other > * {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
     /* ── Section card ── */
     .section-card {
       background: var(--white);
