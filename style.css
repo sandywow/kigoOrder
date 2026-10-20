@@ -504,13 +504,6 @@ body::before {
   aspect-ratio: 4500 / 7775;
   overflow: hidden;
 }
-/* 咖啡杯冒煙（送單等待畫面 .order-sending-cup 用） */
-@keyframes steamRise {
-  0%   { opacity: 0;   transform: translateY(6px); }
-  35%  { opacity: 0.9; }
-  100% { opacity: 0;   transform: translateY(-8px); }
-}
-
 .banner-slide {
   position: absolute;
   inset: 0;
@@ -1054,47 +1047,56 @@ body::before {
   flex-direction: column;
   align-items: center;
 }
-.order-sending-cup {
-  width: 64px;
-  height: 64px;
-  overflow: visible;
-  transform-origin: 50% 100%;
-  animation: cupHop 0.9s ease-in-out infinite;
+/* 拿著信的小女孩（src/sending-girl.png）從右跳到左。拆成兩層動畫疊在一起：
+   - 外層 .order-sending-walker：等速從右邊走到左邊（2.4 秒走完一趟），頭尾淡入淡出，
+     回到右邊重來時才不會突然瞬移
+   - 內層的圖：原地跳起、落地（0.6 秒一下），一趟剛好跳 4 下
+   兩個時間是倍數關係，所以每一趟的落點都一樣。影子放在外層裡，跟著人一起移動。 */
+.order-sending-track {
+  position: relative;
+  width: 200px;
+  height: 78px;
 }
-.order-sending-cup path {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.order-sending-walker {
+  position: absolute;
+  left: calc(50% - 24px);
+  bottom: 0;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: girlTravel 2.4s linear infinite;
 }
-.order-sending-cup .cup { stroke: var(--caramel); }
-.order-sending-cup .steam {
-  stroke: var(--caramel-lt);
-  opacity: 0;
-  animation: steamRise 1.8s ease-in-out infinite;
+@keyframes girlTravel {
+  0%   { transform: translateX(76px);  opacity: 0; }
+  8%   {                               opacity: 1; }
+  92%  {                               opacity: 1; }
+  100% { transform: translateX(-76px); opacity: 0; }
 }
-.order-sending-cup .s2 { animation-delay: 0.6s; }
-.order-sending-cup .s3 { animation-delay: 1.2s; }
-/* 小跳：往上彈、落地時稍微壓扁 */
-@keyframes cupHop {
-  0%, 100% { transform: translateY(0) scale(1, 1); }
-  15%      { transform: translateY(0) scale(1.06, 0.94); }
-  45%      { transform: translateY(-10px) scale(0.97, 1.03); }
-  70%      { transform: translateY(0) scale(1.04, 0.96); }
-  85%      { transform: translateY(0) scale(1, 1); }
-}
-/* 杯子底下的影子，跳起來時跟著縮小 */
-.order-sending-shadow {
+.order-sending-girl {
+  display: block;
   width: 40px;
+  height: auto;
+  animation: girlHop 0.6s infinite;
+}
+/* 上升時越來越慢（ease-out）、下降時越來越快（ease-in），跳起來才有重量感 */
+@keyframes girlHop {
+  0%   { transform: translateY(0);     animation-timing-function: ease-out; }
+  50%  { transform: translateY(-14px); animation-timing-function: ease-in; }
+  100% { transform: translateY(0); }
+}
+/* 腳底下的影子，跳起來時縮小變淡 */
+.order-sending-shadow {
+  width: 30px;
   height: 5px;
-  margin-top: 2px;
+  margin-top: -2px;
   border-radius: 50%;
   background: var(--beige);
-  animation: cupShadow 0.9s ease-in-out infinite;
+  animation: girlShadow 0.6s infinite;
 }
-@keyframes cupShadow {
-  0%, 15%, 70%, 100% { transform: scaleX(1);   opacity: 1; }
-  45%                { transform: scaleX(0.7); opacity: 0.6; }
+@keyframes girlShadow {
+  0%, 100% { transform: scaleX(1);   opacity: 1;   animation-timing-function: ease-out; }
+  50%      { transform: scaleX(0.6); opacity: 0.5; animation-timing-function: ease-in; }
 }
 .order-sending-text {
   margin-top: 14px;
@@ -1104,9 +1106,9 @@ body::before {
   color: var(--ink-soft);
 }
 @media (prefers-reduced-motion: reduce) {
-  .order-sending-cup,
+  .order-sending-walker,
+  .order-sending-girl,
   .order-sending-shadow { animation: none; }
-  .order-sending-cup .steam { animation: none; opacity: 0.6; }
 }
 .cart-item-temp { color: var(--caramel); font-size: 12px; margin-left: 4px; }
 
@@ -1469,15 +1471,23 @@ body::before {
   padding: 34px 26px;
   text-align: center;
 }
+/* 圓圈裡放小女孩上半身（src/success-girl.png）。圖已經去背、切到肚臍，
+   而且肚臍剛好對齊圖的底邊，放進圓圈後身體兩側和帽子頂會被圓弧自然修掉，像頭像照。
+   overflow:hidden + 圓角，正方形的圖就被修成圓的；透明的地方透出底色，
+   底色跟下面「返回菜單」按鈕同一個咖啡色 */
 .receipt-check {
   width: 46px;
   height: 46px;
-  line-height: 46px;
   border-radius: 50%;
-  background: var(--olive);
-  color: var(--white);
-  font-size: 20px;
+  background: var(--caramel);
+  overflow: hidden;
   margin: 0 auto 16px;
+}
+.receipt-check img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .receipt-title {
   font-family: 'DM Serif Display', serif;

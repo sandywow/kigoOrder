@@ -162,7 +162,8 @@
 <section class="page hidden" id="order-success-page" aria-label="Order Success">
   <div class="receipt-wrapper">
     <div class="receipt-card">
-      <div class="receipt-check">✓</div>
+      <!-- 送單成功：開心舉著信的小女孩上半身（原本是綠色勾勾，圓圈和綠底維持原樣） -->
+      <div class="receipt-check"><img src="src/success-girl.png" width="138" height="138" alt=""></div>
       <div class="receipt-title">訂單送出成功</div>
       <p class="receipt-note">我們已收到您的訂單，請稍後片刻<br>若需加點，可返回菜單再次點餐</p>
 
@@ -288,14 +289,14 @@
 <!-- 送單中的等待畫面（js/menu.js setOrderSubmittingUi 控制） -->
 <div id="order-sending" class="order-sending" role="status" aria-live="polite" aria-hidden="true">
   <div class="order-sending-card">
-    <svg class="order-sending-cup" viewBox="0 0 64 64" aria-hidden="true">
-      <path class="steam s1" d="M24 22c-3-4 3-6 0-10s3-6 0-9"/>
-      <path class="steam s2" d="M32 22c-3-4 3-6 0-10s3-6 0-9"/>
-      <path class="steam s3" d="M40 22c-3-4 3-6 0-10s3-6 0-9"/>
-      <path class="cup" d="M14 28h36v8c0 9-7 16-16 16h-4c-9 0-16-7-16-16z"/>
-      <path class="cup" d="M50 31h3a6 6 0 0 1 0 12h-4"/>
-    </svg>
-    <div class="order-sending-shadow" aria-hidden="true"></div>
+    <!-- 拿著信的小女孩從右邊一跳一跳走到左邊，把點單送出去。
+         放在頁面裡（只是先藏著）是故意的：開頁就先下載好，按送出的瞬間才不會空白 -->
+    <div class="order-sending-track" aria-hidden="true">
+      <div class="order-sending-walker">
+        <img class="order-sending-girl" src="src/sending-girl.png" width="119" height="180" alt="">
+        <div class="order-sending-shadow"></div>
+      </div>
+    </div>
     <div class="order-sending-text">點單正在路上…</div>
   </div>
 </div>
