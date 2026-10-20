@@ -40,7 +40,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 13;  // v13: menuRaw 也要 token（v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 14;  // v14: 送單編號與今日訂單只讀表尾、價格快取 10 分鐘（v13: menuRaw 也要 token；v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -428,9 +428,11 @@ function sheetSafeText(value) {
    找到 → 用試算表的價格；找到但沒有價格 → 整張單拒收（這種品項前台本來就點不了）；
    找不到 → 沿用前端單價並回傳品名，由呼叫端記進 changeLog。
    價格表快取 MENU_PRICE_CACHE_SECONDS 秒；經過 saveMenu 會立刻作廢，
-   直接在試算表改價格則最多晚這麼久才生效。 */
+   直接在試算表改價格則最多晚這麼久才生效。
+   v14 從 60 秒拉長到 10 分鐘：過期後下一張單要多讀一次 Items 工作表，
+   60 秒太短，幾乎每張單都在付這個成本。 */
 var MENU_PRICE_CACHE_KEY = 'menu:prices';
-var MENU_PRICE_CACHE_SECONDS = 60;
+var MENU_PRICE_CACHE_SECONDS = 600;
 
 function priceCustomerItems(items) {
   var index = menuPriceIndex();
@@ -553,20 +555,53 @@ function saveOrderReceipt(requestId, receipt) {
   }
 }
 
+/* ── 只讀最近的資料 ──
+   訂單一律加在最下面，所以「今天」的列一定集中在表的尾巴。以前每次送單、
+   每次後台輪詢都把整欄從第 2 列讀到最後一列，訂單越累積越慢（一個品項一列，
+   一年下來好幾萬列）。改成從最後一列往回、一段 RECENT_CHUNK_ROWS 列地讀。
+
+   什麼時候停：讀到某一段「整段都比要找的日期舊」才停。不能「看到一格舊的就停」——
+   後台補登過去日期的單也是加在最下面，會夾在今天的列中間：
+       KG261020005 / KG261020006 / KG261019031(今天補登的昨天的單) / KG261020007
+   看到 KG261019031 就停的話會漏掉上面今天的 005、006，下一張就重複發號。
+   前提：同一天補登超過 RECENT_CHUNK_ROWS 個品項、而且全部連在一起才會誤判，正常營業不會發生。
+
+   isRecent(儲存格的值) 回傳 true = 這格還不夠舊，上面可能還有要找的資料。
+   回傳 { startRow, values }：values[0] 是 startRow 那一列，一路到最後一列。 */
+var RECENT_CHUNK_ROWS = 500;
+
+function readRecentColumn(sheet, colNumber, isRecent) {
+  var lastRow = sheet.getLastRow();
+  var values = [];
+  var end = lastRow;
+  while (end >= 2) {
+    var start = Math.max(2, end - RECENT_CHUNK_ROWS + 1);
+    var chunk = sheet.getRange(start, colNumber, end - start + 1, 1).getValues();
+    values = chunk.concat(values);
+    end = start - 1;
+    var anyRecent = false;
+    for (var i = 0; i < chunk.length; i++) {
+      if (isRecent(chunk[i][0])) { anyRecent = true; break; }
+    }
+    if (!anyRecent) break;
+  }
+  return { startRow: end + 1, values: values };
+}
+
 // 找出「該日期」已經用到的最大流水號 +1。必須在 LockService 的鎖裡呼叫才安全。
 function nextOrderId(sheet, when) {
   var prefix = 'KG' + Utilities.formatDate(when || new Date(), Session.getScriptTimeZone(), 'yyMMdd');
-  var lastRow = sheet.getLastRow();
   var maxSeq = 0;
 
-  if (lastRow >= 2) {
-    var ids = sheet.getRange(2, col('orderId') + 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < ids.length; i++) {
-      var id = String(ids[i][0]);
-      if (id.indexOf(prefix) === 0) {
-        var seq = parseInt(id.substring(prefix.length), 10);
-        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
-      }
+  // 編號開頭的 KG+yyMMdd 可以直接用字串比大小：日期一樣或更新的都算「還不夠舊」
+  var ids = readRecentColumn(sheet, col('orderId') + 1, function (v) {
+    return String(v).substring(0, prefix.length) >= prefix;
+  }).values;
+  for (var i = 0; i < ids.length; i++) {
+    var id = String(ids[i][0]);
+    if (id.indexOf(prefix) === 0) {
+      var seq = parseInt(id.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
     }
   }
 
@@ -947,7 +982,13 @@ function listOrders(scope, dateStr) {
   // 先只讀 receivedAt 這一欄找出符合的列在哪個範圍，再把那段整批讀回來。
   // 表越大差越多——查「今天」時不用把整張表 19 欄全部搬一次。
   if (matchesDate) {
-    var dates = sheet.getRange(2, col('receivedAt') + 1, numRows, 1).getValues();
+    // 「今天」是後台每 4 秒輪詢的那一個，只從表尾往回讀到夠舊為止（見 readRecentColumn）。
+    // 其他範圍（指定日期、本月）是查歷史或統計才用，次數少，照舊整欄讀。
+    var todayKey = dateKey(new Date());
+    var scan = scope === 'today'
+      ? readRecentColumn(sheet, col('receivedAt') + 1, function (v) { return dateKey(v) >= todayKey; })
+      : { startRow: 2, values: sheet.getRange(2, col('receivedAt') + 1, numRows, 1).getValues() };
+    var dates = scan.values;
     var firstIdx = -1, lastIdx = -1;
     for (var i = 0; i < dates.length; i++) {
       if (matchesDate(dates[i][0])) {
@@ -956,7 +997,7 @@ function listOrders(scope, dateStr) {
       }
     }
     if (firstIdx === -1) return [];
-    startRow = firstIdx + 2;
+    startRow = scan.startRow + firstIdx;
     numRows = lastIdx - firstIdx + 1;
   }
 
