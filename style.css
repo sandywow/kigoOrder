@@ -1481,7 +1481,7 @@ body::before {
   border-radius: 50%;
   background: var(--caramel);
   overflow: hidden;
-  margin: 0 auto 16px;
+  margin: 0 auto 8px;
 }
 .receipt-check img {
   display: block;
@@ -1500,7 +1500,7 @@ body::before {
   font-size: 13px;
   color: var(--ink-faint);
   line-height: 1.9;
-  margin-top: 12px;
+  margin-top: 3px;
 }
 .receipt-card .deco-rule { margin: 24px 0; }
 .receipt-meta {
