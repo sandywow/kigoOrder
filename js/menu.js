@@ -330,6 +330,23 @@ var TEMP_ICON_COLD = '<svg class="temp-icon temp-icon-cold" viewBox="0 0 24 24" 
   'M16.68 14.7l.25 2.89M16.68 14.7l2.63-1.23M12 17.4l-2.38 1.66M12 17.4l2.38 1.66' +
   'M7.32 14.7l-2.63-1.23M7.32 14.7l-.25 2.89M7.32 9.3l-.25-2.89M7.32 9.3l-2.63 1.23"/></svg>';
 
+/* 萬聖節標籤：標籤文字裡有「萬聖」或 Halloween，就換成黑紫色的專屬樣式，前面放一顆南瓜
+   （樣式在 style.css 的 .item-tag-halloween，蜘蛛網是那裡的背景圖）。
+   店家只要在標籤欄打「萬聖節限定」之類的字就好，不用另外設定；節日過後把字刪掉就恢復。
+   標籤裡如果自己打了 🎃，拿掉它，免得跟圖示重複出現兩顆南瓜。 */
+const HALLOWEEN_TAG = /萬聖|halloween/i;
+const TAG_PUMPKIN_ICON = '<svg class="tag-pumpkin" viewBox="0 0 16 16" aria-hidden="true">' +
+  '<path d="M8 4.6c-.2-1.5.4-2.7 1.8-3.3" fill="none" stroke="#7FB04A" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<ellipse cx="5" cy="10" rx="3.6" ry="4.4" fill="#D9641E"/>' +
+  '<ellipse cx="11" cy="10" rx="3.6" ry="4.4" fill="#D9641E"/>' +
+  '<ellipse cx="8" cy="10" rx="3.3" ry="4.8" fill="#F28A2E"/></svg>';
+
+function itemTagHtml(text) {
+  if (!HALLOWEEN_TAG.test(text)) return `<span class="item-tag">${text}</span>`;
+  const label = text.replace(/🎃/g, '').trim();
+  return `<span class="item-tag item-tag-halloween">${TAG_PUMPKIN_ICON}${label}</span>`;
+}
+
 // 沒設定溫度的品項（以及分類把冰熱顯示關掉時）不會有圖示 ——
 // 不像以前的圓點需要留空白佔位，圖示是跟在品名後面的，沒有就是沒有。
 function tempIcons(temp) {
@@ -378,7 +395,7 @@ function renderSection(category) {
       .split(/[,，、]/)
       .map(s => s.trim())
       .filter(Boolean)
-      .map(s => `<span class="item-tag">${s}</span>`)
+      .map(itemTagHtml)
       .join('');
     const soldOutHtml = item.soldOut ? `<span class="item-tag item-tag-soldout">售完</span>` : '';
     // 標籤一律自己一行，排在品名底下 —— 品名長短不一時才不會忽上忽下
