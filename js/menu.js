@@ -471,6 +471,7 @@ function setCtaButton(label) {
 
   el.style.display = '';
   el.textContent = '';
+  let charIndex = 0;
   Array.from(text).forEach(ch => {
     const span = document.createElement('span');
     if (ch.trim() === '') {
@@ -478,6 +479,8 @@ function setCtaButton(label) {
     } else {
       span.className = 'btn-menu-char';
       span.textContent = ch;
+      // 第幾個圓章：CSS 用它把跳動時間依序錯開，四顆輪流跳成一道波浪（見 style.css 的 stampWave）
+      span.style.setProperty('--i', charIndex++);
     }
     el.appendChild(span);
   });

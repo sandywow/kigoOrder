@@ -429,6 +429,18 @@ body::before {
   letter-spacing: 0;
   text-indent: 0;
   transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  /* 很多客人第一次不知道要點這排圓章才進得了菜單：讓四顆輪流輕輕跳一下（今→日→菜→單），
+     跳完停一下再來。每顆都跑同一段 3.2 秒的動畫，只是用 --i（第幾顆，menu.js 設的）
+     把開始時間往後錯開 0.12 秒，看起來就是一道波浪 */
+  animation: stampWave 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 0.12s);
+}
+@keyframes stampWave {
+  0%, 14%, 100% { transform: translateY(0); }
+  7%            { transform: translateY(-7px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-menu-char { animation: none; }
 }
 /* 標題中間若有空格，不套圈、只留一點間隔 */
 .btn-menu-gap { width: 0.35em; }
@@ -441,12 +453,15 @@ body::before {
   color: var(--cream);
 }
 
+/* 「瀏覽全品項⤴︎」：靜態的說明文字（會動的是上面的圓章）；
+   第一次來的客人常常直接點這行字，所以點它也能進菜單 */
 .btn-hint {
   font-family: 'Noto Serif TC', serif;
   font-size: 12px;
   color: var(--ink-faint);
   letter-spacing: 0.22em;
   text-indent: 0.22em;
+  cursor: pointer;
 }
 
 /* Decorative footer elements */
