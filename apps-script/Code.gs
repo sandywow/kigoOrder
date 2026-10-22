@@ -25,6 +25,8 @@
  *   POST {action:'updateOrder', orderId, items:[...]}  → 修改訂單內容
  *   POST {action:'deleteOrder', orderId}           → 刪除整筆訂單
  *   POST {action:'clearToday', confirm:'CLEAR_TODAY'} → 清空今天所有訂單
+ *   POST {action:'saveNotepad', text}           → 存後台小便籤（所有裝置共用）
+ *   🔒 GET  ?action=notepad&token=…      → 讀後台小便籤
  *
  * 共同菜單資料（menuWeb / orderWeb 共用）實作在另一個檔案 Menu.gs：
  *   GET  ?action=menu&site=menuWeb   → 已組裝好的菜單（menuData/landingData/tabs/sectionTitles）
@@ -40,7 +42,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 14;  // v14: 送單編號與今日訂單只讀表尾、價格快取 10 分鐘（v13: menuRaw 也要 token；v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 15;  // v15: 後台小便籤所有裝置同步（v14: 送單編號與今日訂單只讀表尾、價格快取 10 分鐘；v13: menuRaw 也要 token；v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -95,7 +97,7 @@ function col(name) {
    後台只要輸入一次。還沒設定 token 時一律拒絕（fail closed），
    不會退回成誰都能管訂單。
    ═════════════════════════════ */
-var ADMIN_ACTIONS = ['updateStatus', 'updatePayment', 'updateOrder', 'deleteOrder', 'clearToday'];
+var ADMIN_ACTIONS = ['updateStatus', 'updatePayment', 'updateOrder', 'deleteOrder', 'clearToday', 'saveNotepad'];
 
 // 回傳 null = 通過；回傳物件 = 直接當成回應送出
 function orderAdminAuthorize(token) {
@@ -125,6 +127,12 @@ function doPost(e) {
     if (ADMIN_ACTIONS.indexOf(payload.action) !== -1 || payload.manual) {
       var denied = orderAdminAuthorize(payload.token);
       if (denied) return jsonResponse(denied);
+    }
+
+    // 後台小便籤。跟 saveMenu 一樣一定要在 routeOrderWrite 之前攔下來，
+    // 否則沒命中的 action 會掉進「建立訂單」。便籤不是訂單，也不用作廢訂單快取。
+    if (payload.action === 'saveNotepad') {
+      return handleSaveNotepad(payload);
     }
 
     // 菜單寫入 — 實作在 MenuWrite.gs。
@@ -245,6 +253,11 @@ function doGet(e) {
     if (params.action === 'menu') {
       return jsonResponse(buildMenuPayloadCached(params.site));
     }
+    if (params.action === 'notepad') {
+      var deniedNote = orderAdminAuthorize(params.token);
+      if (deniedNote) return jsonResponse(deniedNote);
+      return jsonResponse(Object.assign({ ok: true }, readNotepad()));
+    }
     if (params.action === 'menuRaw') {
       // 原始列含下架品項、備註欄等還沒公開的內容，只給後台看
       var deniedRaw = orderAdminAuthorize(params.token);
@@ -260,6 +273,36 @@ function doGet(e) {
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
   }
+}
+
+/* ═════════════════════════════
+   後台小便籤（後台最上面那條 📌 輸入框）
+   存在指令碼屬性（跟 MENU_WRITE_TOKEN 同一個地方），所有裝置共用同一份。
+   沒有另外開工作表：便籤只有一小段文字，不需要也不該跟訂單、菜單混在一起。
+   兩台裝置同時改的話，後存的蓋掉先存的（小店同一時間通常只有一個人在改）。
+   ═════════════════════════════ */
+var NOTEPAD_PROPERTY = 'ADMIN_NOTEPAD';
+var NOTEPAD_MAX = 500;
+
+// 回傳 { text, updatedAt }；從來沒存過時 updatedAt 是 null（後台靠它判斷要不要把舊的本機便籤搬上來）
+function readNotepad() {
+  var raw = PropertiesService.getScriptProperties().getProperty(NOTEPAD_PROPERTY);
+  if (!raw) return { text: '', updatedAt: null };
+  try {
+    var data = JSON.parse(raw);
+    return { text: String(data.text == null ? '' : data.text), updatedAt: data.updatedAt || null };
+  } catch (err) {
+    return { text: '', updatedAt: null };
+  }
+}
+
+function handleSaveNotepad(payload) {
+  // 不 trim：邊打邊存，句尾剛打的空白不能被吃掉
+  var text = String(payload.text == null ? '' : payload.text).slice(0, NOTEPAD_MAX);
+  var updatedAt = new Date().toISOString();
+  PropertiesService.getScriptProperties().setProperty(
+    NOTEPAD_PROPERTY, JSON.stringify({ text: text, updatedAt: updatedAt }));
+  return jsonResponse({ ok: true, text: text, updatedAt: updatedAt });
 }
 
 /* ═════════════════════════════
