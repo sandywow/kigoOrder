@@ -1,45 +1,23 @@
 const menuData = {
   seasonal: [
     {
-      name: "黃金巴斯克乳酪蛋糕",
-      nameJp: "內含黃金地瓜、雞蛋｜無麩質",
-      desc: "切下一塊金黃\n今天就吃這個吧",
-      price: "NT$160",
-      tag: "新品嚐鮮.ᐟ.ᐟ",
-      image: "src/GOLDEN PICTURE-06.webp",
-      emoji: null,
-      temp: null,
-      soldOut: false
-    },
-    {
-      name: "重烏龍芝士蛋糕",
-      nameJp: null,
-      desc: "像山風一樣，茶香迎面而來\n茶韻厚實，濃中帶清\n喜歡茶的你一定要試試！",
-      price: "NT$160",
-      tag: "好評回歸.ᐟ.ᐟ",
+      name: "小幽靈の紅寶石泡湯派對",
+      nameJp: "幽靈莓果巴斯克",
+      desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
+      price: "NT$150",
+      tag: "萬聖搗蛋小分隊",
       image: null,
       emoji: null,
       temp: null,
       soldOut: false
     },
     {
-      name: "莊園蘋果冰茶",
-      nameJp: null,
-      desc: "接骨木白花香揉合蘋果茶韻\n搭配特製果汁冰塊\n冰塊融化後風味更飽滿，微甜不膩 🌿.ᐟ.ᐟ",
-      price: "NT$150",
-      tag: null,
-      image: "src/apple iced tea PICTURE-05.webp",
-      emoji: null,
-      temp: "iced",
-      soldOut: false
-    },
-    {
-      name: "享・ 阿芙加朵",
-      nameJp: "ESPRESSO AFFOGATO",
-      desc: "寫給盛夏的冰與火之歌：\n\n讓熱咖啡\n緩緩落進冰淇淋\n\n把最後一刻\n留給最剛好的相遇",
-      price: "NT$150",
-      tag: null,
-      image: "src/AFFOGATO PICTURE-04.webp",
+      name: "木乃伊の睡袋派對",
+      nameJp: "巧克力磅蛋糕",
+      desc: "還⋯還在睡⋯🩹🍫",
+      price: "NT$100",
+      tag: "萬聖搗蛋小分隊",
+      image: null,
       emoji: null,
       temp: null,
       soldOut: false
@@ -206,9 +184,37 @@ const menuData = {
     }
   ],
   cocktail: [
-
+    {
+      name: "微醺隨想",
+      nameJp: "店家特調・風味隨想",
+      desc: "獻給想放鬆一下的你\n一杯帶有酒精的微醺時光🍸",
+      price: "NT$250",
+      tag: null,
+      image: "src/WINE-PICTURE.webp",
+      emoji: null,
+      temp: null,
+      soldOut: false
+    }
   ],
   dessert: [
+    {
+      name: "小幽靈の紅寶石泡湯派對",
+      nameJp: "幽靈莓果巴斯克",
+      desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
+      price: "NT$150",
+      tag: "萬聖搗蛋小分隊",
+      image: null,
+      emoji: null
+    },
+    {
+      name: "木乃伊の睡袋派對",
+      nameJp: "巧克力磅蛋糕",
+      desc: "還⋯還在睡⋯🩹🍫",
+      price: "NT$100",
+      tag: "萬聖搗蛋小分隊",
+      image: null,
+      emoji: null
+    },
     {
       name: "香橙巴斯克蛋糕",
       nameJp: null,
@@ -240,7 +246,7 @@ const menuData = {
       image: "src/lemon cake-01.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     },
     {
       name: "浮生花事",
@@ -328,7 +334,7 @@ const landingData = {
   showDate: false,
   dateSeasonLabel: "Spring Menu",
   heroImage: null,
-  bannerImages: ["src/BANNER GOLDEN-06.webp"],
+  bannerImages: ["src/BANNER HALLOWEEN-07.webp"],
   heroBadge: null,
   heroTitle: null,
   heroSubtitle: null,
@@ -348,7 +354,7 @@ const landingData = {
   hideCard: true,
   hideBanner: false,
   ctaButton: "今日菜單",
-  ctaHint: "瀏覽全品項⤴︎",
+  ctaHint: "點擊瀏覽全品項⤴︎",
   footerLeft: "— since 2023 —",
   footerRight: null,
   menuTitle: "今日菜單",
