@@ -36,6 +36,77 @@ function renderMenuEditor(catKey) {
     renderMenuEditor(catKey);
   };
   wrap.appendChild(addBtn);
+
+  const linkBtn = document.createElement('button');
+  linkBtn.className = 'btn-add';
+  linkBtn.textContent = '＋ 從其他分類加入';
+  linkBtn.onclick = () => openLinkItemModal(catKey);
+  wrap.appendChild(linkBtn);
+}
+
+/* ── 從其他分類加入 ──
+   把別的分類裡「已經存在的商品」加進這個分類。帶著同一個 id 複製一份進來，
+   儲存時 buildItemsTable 會認出是同一個商品，所以 Items 不會多一列，
+   只會在 ItemCategories 多一條連結；之後在這裡按「移除」也只拆掉這條連結。 */
+let linkTargetCat = null;
+
+function openLinkItemModal(catKey) {
+  linkTargetCat = catKey;
+  const tabLabel = key => ((state.tabs || []).find(t => t.key === key) || {}).label || key;
+  document.getElementById('link-item-title').textContent = '加入到「' + tabLabel(catKey) + '」';
+
+  const inTarget = {};
+  (state.menuData[catKey] || []).forEach(item => { if (item.id) inTarget[item.id] = true; });
+
+  // 同一個商品可能在好幾個分類，清單裡只列一次（列在第一個出現的分類下）
+  const seen = {};
+  let html = '';
+  Object.keys(state.menuData || {}).forEach(key => {
+    if (key === catKey) return;
+    const rows = [];
+    (state.menuData[key] || []).forEach((item, idx) => {
+      if (item.id && seen[item.id]) return;
+      if (item.id) seen[item.id] = true;
+      const already = item.id && inTarget[item.id];
+      const note = !item.id ? '尚未儲存，請先儲存一次' : already ? '已在這個分類' : (item.price || '');
+      rows.push(`<button class="link-item-row" ${!item.id || already ? 'disabled' : ''}
+        onclick="linkExistingItem('${key}',${idx})">
+        <span class="link-item-name">${esc(item.name) || '（未命名）'}</span>
+        <span class="link-item-note">${esc(note)}</span>
+      </button>`);
+    });
+    if (rows.length) html += `<div class="link-item-group">${esc(tabLabel(key))}</div>` + rows.join('');
+  });
+
+  document.getElementById('link-item-body').innerHTML = html || '<p class="modal-hint">其他分類還沒有商品</p>';
+  document.getElementById('link-item-backdrop').classList.add('open');
+  document.getElementById('link-item-modal').classList.add('open');
+}
+
+function closeLinkItemModal() {
+  linkTargetCat = null;
+  document.getElementById('link-item-backdrop').classList.remove('open');
+  document.getElementById('link-item-modal').classList.remove('open');
+}
+
+function linkExistingItem(fromKey, idx) {
+  const catKey = linkTargetCat;
+  const src = (state.menuData[fromKey] || [])[idx];
+  if (!catKey || !src || !src.id) return;
+  if (!state.menuData[catKey]) state.menuData[catKey] = [];
+  if (state.menuData[catKey].some(item => item.id === src.id)) { closeLinkItemModal(); return; }
+
+  const copy = deepClone(src);
+  // 連結資訊是「這個分類的」，不能沿用來源分類的排序，否則 keepsExistingOrder 會判斷錯
+  copy.linkCategoryKey = catKey;
+  copy.linkSortOrder   = null;
+  copy.linkActive      = true;
+  state.menuData[catKey].push(copy);
+  adminEdited = true;
+
+  closeLinkItemModal();
+  renderMenuEditor(catKey);
+  showToast('已加入「' + (src.name || '品項') + '」，記得按儲存');
 }
 
 function buildItemCard(catKey, item, idx, withTemp, total) {

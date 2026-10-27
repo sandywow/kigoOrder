@@ -750,6 +750,11 @@ function changeModalQty(delta) {
   updateModalTotal();
 }
 
+function cartItemKey(item) {
+  if (!item) return '';
+  return item.id ? 'id:' + item.id : 'name:' + (item.name || '');
+}
+
 function confirmAddToCart() {
   if (!pendingCartSelection) return;
   if (blockedBySubmitting()) return;
@@ -771,7 +776,10 @@ function confirmAddToCart() {
     temp = item.temp;
   }
 
-  const found = cart.find(c => c.cat === cat && c.idx === idx && c.temp === temp);
+  // 同一品項可能同時出現在好幾個分類（例如季節限定＋甜點），
+  // 所以用品項本身（試算表 id，沒有就用名稱）比對，不能用 cat+idx，否則購物車會拆成兩筆
+  const key = cartItemKey(item);
+  const found = cart.find(c => cartItemKey((menuData[c.cat] || [])[c.idx]) === key && c.temp === temp);
   if (found) {
     found.qty = Math.min(MAX_ITEM_QTY, found.qty + qty);
   } else {
