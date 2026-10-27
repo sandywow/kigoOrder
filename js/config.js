@@ -6,7 +6,7 @@ const menuData = {
       desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
       price: "NT$150",
       tag: "萬聖搗蛋小分隊",
-      image: null,
+      image: "src/GHOST PICTURE-07.webp",
       emoji: null,
       temp: null,
       soldOut: false
@@ -17,7 +17,7 @@ const menuData = {
       desc: "還⋯還在睡⋯🩹🍫",
       price: "NT$100",
       tag: "萬聖搗蛋小分隊",
-      image: null,
+      image: "src/MUMMY PICTURE-07.webp",
       emoji: null,
       temp: null,
       soldOut: false
@@ -203,7 +203,7 @@ const menuData = {
       desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
       price: "NT$150",
       tag: "萬聖搗蛋小分隊",
-      image: null,
+      image: "src/GHOST PICTURE-07.webp",
       emoji: null
     },
     {
@@ -212,7 +212,7 @@ const menuData = {
       desc: "還⋯還在睡⋯🩹🍫",
       price: "NT$100",
       tag: "萬聖搗蛋小分隊",
-      image: null,
+      image: "src/MUMMY PICTURE-07.webp",
       emoji: null
     },
     {
