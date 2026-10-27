@@ -750,9 +750,12 @@ function changeModalQty(delta) {
   updateModalTotal();
 }
 
+// 用「品名＋價格」而不是試算表 id：試算表裡可能有人把同一個商品打成兩列
+// （例如季節推薦和甜點各一筆、id 不同），客人看到的是同一個東西，購物車就該合併。
+// 價格不同的同名品項（例如不同份量）仍然分開。
 function cartItemKey(item) {
   if (!item) return '';
-  return item.id ? 'id:' + item.id : 'name:' + (item.name || '');
+  return (item.name || '') + '|' + itemUnitPrice(item);
 }
 
 function confirmAddToCart() {
@@ -777,7 +780,7 @@ function confirmAddToCart() {
   }
 
   // 同一品項可能同時出現在好幾個分類（例如季節限定＋甜點），
-  // 所以用品項本身（試算表 id，沒有就用名稱）比對，不能用 cat+idx，否則購物車會拆成兩筆
+  // 所以用品名＋價格比對（見 cartItemKey），不能用 cat+idx，否則購物車會拆成兩筆
   const key = cartItemKey(item);
   const found = cart.find(c => cartItemKey((menuData[c.cat] || [])[c.idx]) === key && c.temp === temp);
   if (found) {
