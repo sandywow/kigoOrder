@@ -21,6 +21,17 @@ const menuData = {
       emoji: null,
       temp: null,
       soldOut: false
+    },
+    {
+      name: "微醺隨想",
+      nameJp: "店家特調・風味隨想",
+      desc: "獻給想放鬆一下的你\n一杯帶有酒精的微醺時光🍸",
+      price: "NT$250",
+      tag: null,
+      image: "src/WINE-PICTURE.webp",
+      emoji: null,
+      temp: null,
+      soldOut: false
     }
   ],
   coffee: [
@@ -66,7 +77,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: "both",
-      soldOut: false
+      soldOut: true
     },
     {
       name: "沁涼青檸咖啡",
@@ -257,7 +268,7 @@ const menuData = {
       image: "src/POTATO PICTURE-02.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     },
     {
       name: "潮汐花事",
@@ -268,7 +279,7 @@ const menuData = {
       image: "src/FISH PICTURE-03.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     },
     {
       name: "享・ 阿芙加朵",
