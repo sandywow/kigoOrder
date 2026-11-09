@@ -9,7 +9,7 @@ const menuData = {
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     }
   ],
   coffee: [
@@ -33,7 +33,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: "both",
-      soldOut: false
+      soldOut: true
     },
     {
       name: "冰釀咖啡",
@@ -182,7 +182,7 @@ const menuData = {
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     }
   ],
   dessert: [
@@ -206,7 +206,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     },
     {
       name: "午後檸檬",
@@ -217,7 +217,7 @@ const menuData = {
       image: "src/lemon cake-01.webp",
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     },
     {
       name: "浮生花事",
@@ -228,7 +228,7 @@ const menuData = {
       image: "src/POTATO PICTURE-02.webp",
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     },
     {
       name: "潮汐花事",
@@ -239,7 +239,7 @@ const menuData = {
       image: "src/FISH PICTURE-03.webp",
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     },
     {
       name: "享・ 阿芙加朵",
@@ -294,7 +294,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     }
   ]
 };
