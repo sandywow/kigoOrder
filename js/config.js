@@ -1,33 +1,11 @@
 const menuData = {
   seasonal: [
     {
-      name: "小幽靈の紅寶石泡湯派對",
-      nameJp: "莓果巴斯克",
-      desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
-      price: "NT$150",
-      tag: "萬聖搗蛋小分隊",
-      image: "src/GHOST PICTURE-07.webp",
-      emoji: null,
-      temp: null,
-      soldOut: true
-    },
-    {
-      name: "木乃伊の睡袋派對",
-      nameJp: "巧克力磅蛋糕",
-      desc: "還⋯還在睡⋯🩹🍫",
-      price: "NT$100",
-      tag: "萬聖搗蛋小分隊",
-      image: "src/MUMMY PICTURE-07.webp",
-      emoji: null,
-      temp: null,
-      soldOut: false
-    },
-    {
       name: "微醺隨想",
       nameJp: "店家特調・風味隨想",
       desc: "獻給想放鬆一下的你\n帶有酒精的微醺時光🍸",
       price: "NT$250",
-      tag: "萬聖搗蛋小分隊",
+      tag: null,
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
@@ -200,7 +178,7 @@ const menuData = {
       nameJp: "店家特調・風味隨想",
       desc: "獻給想放鬆一下的你\n帶有酒精的微醺時光🍸",
       price: "NT$250",
-      tag: "萬聖搗蛋小分隊",
+      tag: null,
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
@@ -208,28 +186,6 @@ const menuData = {
     }
   ],
   dessert: [
-    {
-      name: "小幽靈の紅寶石泡湯派對",
-      nameJp: "莓果巴斯克",
-      desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
-      price: "NT$150",
-      tag: "萬聖搗蛋小分隊",
-      image: "src/GHOST PICTURE-07.webp",
-      emoji: null,
-      temp: null,
-      soldOut: true
-    },
-    {
-      name: "木乃伊の睡袋派對",
-      nameJp: "巧克力磅蛋糕",
-      desc: "還⋯還在睡⋯🩹🍫",
-      price: "NT$100",
-      tag: "萬聖搗蛋小分隊",
-      image: "src/MUMMY PICTURE-07.webp",
-      emoji: null,
-      temp: null,
-      soldOut: false
-    },
     {
       name: "香橙巴斯克蛋糕",
       nameJp: null,
@@ -347,7 +303,7 @@ const landingData = {
   cafeName: "EnjoyKigo",
   cafeSub: "享 · 奇果",
   showDate: false,
-  dateSeasonLabel: "Spring Menu",
+  dateSeasonLabel: "Autumn Menu",
   heroImage: null,
   bannerImages: ["src/BANNER HALLOWEEN-07.webp"],
   heroBadge: null,
@@ -373,7 +329,7 @@ const landingData = {
   footerLeft: "— since 2023 —",
   footerRight: null,
   menuTitle: "今日菜單",
-  menuSubtitle: "Summer 2026",
+  menuSubtitle: "Autumn 2026",
   tableNumbers: ["1","2","3","4","吧檯"],
   orderEndpoint: "https://script.google.com/macros/s/AKfycby4GAEoCpwSKlcLXg-wYLo7EfZOKVX0vV6FnexownNbZKD2MR0k0nN0zvd7Hmjog0t2/exec"
 };
