@@ -201,6 +201,7 @@ function showMenu(initialKey) {
   const menuPage = document.getElementById('menu-page');
   menuPage.classList.replace('hidden', 'visible');
   menuPage.scrollTop = 0;
+  paintHistoryChip();   // 過了午夜「今天」就換一天，進菜單時重算
 
   // 全部分類一次畫出來，再跳到指定的分類（第一個分類就停在最上面）
   renderMenu();
@@ -851,12 +852,107 @@ function removeCartItem(i) { if (blockedBySubmitting()) return; cart.splice(i, 1
 
 function clearCart() { if (blockedBySubmitting()) return; if (!confirm('清空購物車？')) return; cart.length = 0; renderCart(); }
 
-function saveOrderToHistory(order) {
+/* ═════════════════════
+   今日點餐紀錄
+   ═════════════════════ */
+// 紀錄只存在客人自己的手機（localStorage），畫面只列今天的。
+// 店員在後台改過的單這裡不會跟著變，所以底下會提醒「以結帳為準」。
+const HISTORY_KEY = 'kigoOrderHistory';
+const HISTORY_KEEP_DAYS = 7;   // 畫面只用到今天，多留幾天就好，免得越存越多
+
+function loadOrderHistory() {
   try {
-    const history = JSON.parse(localStorage.getItem('kigoOrderHistory')) || [];
-    history.push(order);
-    localStorage.setItem('kigoOrderHistory', JSON.stringify(history));
-  } catch (e) {}
+    const list = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+
+function saveOrderToHistory(order) {
+  const cutoff = Date.now() - HISTORY_KEEP_DAYS * 24 * 60 * 60 * 1000;
+  const history = loadOrderHistory().filter(o => new Date(o.createdAt).getTime() >= cutoff);
+  history.push(order);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) {}
+  paintHistoryChip();
+}
+
+function todayOrders() {
+  const today = new Date().toDateString();
+  return loadOrderHistory().filter(o => new Date(o.createdAt).toDateString() === today);
+}
+
+// 菜單頁標題旁的入口，今天點過才出現
+function paintHistoryChip() {
+  const chip = document.getElementById('history-chip');
+  if (!chip) return;
+  const count = todayOrders().length;
+  chip.style.display = count ? '' : 'none';
+  chip.innerHTML = `點餐紀錄 <span class="history-chip-count">${count}</span>`;
+}
+
+// 數量緊接在品名後，品名和金額之間用點線連起來，像收據
+function historyItemRow(item) {
+  const qty = Number(item.quantity) || 0;
+  const price = Number(item.unitPrice) || 0;
+  const tempLabel = item.temp ? ` <span class="cart-item-temp">(${item.temp === 'hot' ? '熱' : item.temp === 'iced' ? '冰' : escHtml(item.temp)})</span>` : '';
+  return `<div class="history-item">
+      <span class="history-item-name">${escHtml(item.name || '')}${tempLabel}<span class="history-qty"><span class="qty-x">×</span>${qty}</span></span>
+      <span class="history-item-dots"></span>
+      <span class="history-item-sub">NT$${price * qty}</span>
+    </div>`;
+}
+
+function openOrderHistory() {
+  const orders = todayOrders();
+  const body = document.getElementById('history-body');
+  const ld = landingData;
+  // 收據抬頭：店名＋標題
+  const head = `
+    <div class="history-head">
+      ${ld.cafeName ? `<div class="history-shop">${escHtml(ld.cafeName)}</div>` : ''}
+      ${ld.cafeSub ? `<div class="history-shop-sub">${escHtml(ld.cafeSub)}</div>` : ''}
+      <div class="history-title">今日點餐明細</div>
+    </div>`;
+  if (!orders.length) {
+    body.innerHTML = head + '<p class="history-empty">今天還沒有點餐紀錄</p>';
+  } else {
+    const last = orders[orders.length - 1];
+    const totalQty = orders.reduce((s, o) => s + (o.items || []).reduce((n, i) => n + (Number(i.quantity) || 0), 0), 0);
+    const totalAmt = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const who = last.nickname ? ` · ${escHtml(last.nickname)}` : '';
+    body.innerHTML = head + `
+      <div class="history-meta">
+        <div><span>日期</span><span>${formatOrderTime(last.createdAt).slice(0, 10)}</span></div>
+        ${last.tableNumber ? `<div><span>桌號</span><span>${escHtml(last.tableNumber)}${who}</span></div>` : ''}
+      </div>` +
+      orders.map((o, idx) => `
+      <section class="history-order">
+        <div class="history-order-head">
+          <span>#${idx + 1}${idx ? ' 加點' : ''}　${formatOrderTime(o.createdAt).slice(-5)}</span>
+          <span>${escHtml(o.orderId || '')}</span>
+        </div>
+        ${(o.items || []).map(historyItemRow).join('')}
+      </section>`).join('') + `
+      <div class="history-total">
+        <span>合計 <small>${totalQty} 件</small></span>
+        <span>NT$${totalAmt}</span>
+      </div>
+      <div class="history-foot">
+        <div class="history-thanks">Thank you</div>
+        <div class="history-note">實際金額以店內結帳為準</div>
+      </div>`;
+  }
+  body.scrollTop = 0;
+  document.getElementById('history-backdrop').classList.add('open');
+  const modal = document.getElementById('history-modal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeOrderHistory() {
+  document.getElementById('history-backdrop').classList.remove('open');
+  const modal = document.getElementById('history-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
 }
 
 // 訂單編號格式：KG + 西元年後兩碼 + 月日(MMDD) + 當天第幾張訂單(3碼)，例如 KG260805001。
@@ -1267,6 +1363,7 @@ function initLanding() {
   // （sessionStorage 會在分頁關閉時清掉，超過 SEATING_TTL_MS 也會失效）
   loadSeating();
   paintSeatingChip();
+  paintHistoryChip();
 
   /* ── Apply visibility flags from landingData ── */
   const landing = document.getElementById('landing');

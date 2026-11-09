@@ -142,9 +142,13 @@
       </div>
       <div style="text-align:right" id="menu-logo-wrap"></div>
     </div>
-    <div style="margin-top:16px">
-      <div class="menu-title"    id="menu-title-text"></div>
-      <div class="menu-subtitle" id="menu-subtitle-text"></div>
+    <div class="menu-title-row">
+      <div>
+        <div class="menu-title"    id="menu-title-text"></div>
+        <div class="menu-subtitle" id="menu-subtitle-text"></div>
+      </div>
+      <!-- 今天在這支手機點過才出現（js/menu.js paintHistoryChip） -->
+      <button type="button" class="history-chip" id="history-chip" onclick="openOrderHistory()" style="display:none"></button>
     </div>
   </div>
 
@@ -186,8 +190,21 @@
     </div>
 
     <button type="button" class="receipt-back-btn" onclick="backToMenuFromSuccess()">返回菜單</button>
+    <button type="button" class="receipt-history-btn" onclick="openOrderHistory()">查看今日點餐紀錄</button>
   </div>
 </section>
+
+<!-- ═══════════════════════════════════ -->
+<!--  今日點餐紀錄（只讀這支手機存的）   -->
+<!-- ═══════════════════════════════════ -->
+<div id="history-backdrop" class="option-backdrop" onclick="closeOrderHistory()"></div>
+<div id="history-modal" class="option-modal history-modal" onclick="closeOrderHistory()" aria-hidden="true" role="dialog" aria-modal="true" aria-label="今日點餐紀錄">
+  <!-- 點收據外面的空白處也能關 -->
+  <div class="history-receipt" onclick="event.stopPropagation()">
+    <div class="history-paper" id="history-body"></div>
+  </div>
+  <button type="button" class="history-close" onclick="closeOrderHistory()">關閉</button>
+</div>
 
 <!-- ═══════════════════════════════════ -->
 <!--  入座資訊（進菜單前先填）           -->
