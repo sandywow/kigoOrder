@@ -1105,6 +1105,19 @@ body::before {
   text-align: right;
   white-space: nowrap;
 }
+/* 送出時有品項剛售完的說明（js/menu.js handleSoldOutReply） */
+.cart-notice {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--caramel);
+  border-radius: 0 8px 8px 0;
+  background: rgba(184, 132, 90, 0.12);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.cart-notice b { color: var(--caramel); font-weight: 600; }
 /* 數量膠囊：− 數字 ＋ 連成一顆，數字放大才不會看漏 */
 .cart-stepper {
   display: flex;

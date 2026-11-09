@@ -804,10 +804,11 @@ function toggleCart() {
   backdrop.classList.toggle('open', open);
   drawer.setAttribute('aria-hidden', String(!open));
   if (open) renderCart();
+  else cartNotice = null;   // 售完說明看過了，下次打開不再出現
 }
 
 function openCart() { document.getElementById('cart-drawer').classList.add('open'); document.getElementById('cart-backdrop').classList.add('open'); renderCart(); }
-function closeCart() { document.getElementById('cart-drawer').classList.remove('open'); document.getElementById('cart-backdrop').classList.remove('open'); }
+function closeCart() { cartNotice = null; document.getElementById('cart-drawer').classList.remove('open'); document.getElementById('cart-backdrop').classList.remove('open'); }
 
 // 剩 1 份時「−」換成垃圾桶：再按一下就是移除，客人看圖示就知道，不用另外一顆「移除」
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -850,6 +851,10 @@ function renderCart() {
       <div class="cart-item-sub">NT$${price * c.qty}</div>
     </div>`;
   }).join('') : '<div class="cart-empty">購物車目前是空的</div>';
+  if (cartNotice) {
+    // 中文句子之間不能有換行，瀏覽器會把換行顯示成一個空白
+    wrap.insertAdjacentHTML('afterbegin', `<div class="cart-notice" role="alert">抱歉，<b>${cartNotice.map(escHtml).join('、')}</b> 剛剛售完了，已從購物車移除。${cart.length ? '請確認其他品項後再送出一次。' : ''}</div>`);
+  }
 
   countEl.textContent = String(qtyTotal);
   countEl.hidden = !qtyTotal;   // 0 件不顯示小圓點
@@ -1120,6 +1125,7 @@ function submitOrder() {
     requestId = newRequestId();
   }
   unconfirmedOrder = { requestId, fingerprint };
+  if (cartNotice) { cartNotice = null; renderCart(); }   // 再送一次時，上一輪的售完說明收起來
 
   const payload = {
     clientRequestId: requestId,
@@ -1172,6 +1178,12 @@ function submitOrder() {
       return res.json();
     })
     .then(data => {
+      // 有品項在客人送出前被改成售完：伺服器整張不收，回傳是哪幾項（見 Code.gs findSoldOutItems）
+      if (data && data.ok === false && Array.isArray(data.soldOut) && data.soldOut.length) {
+        const soldOutErr = new Error('sold out');
+        soldOutErr.soldOut = data.soldOut;
+        throw soldOutErr;
+      }
       if (!data || data.ok === false) throw new Error((data && data.error) || '伺服器回應錯誤');
       return data;
     })
@@ -1190,12 +1202,43 @@ function submitOrder() {
       finishOrder(payload);
     }, err => {
       done();
+      if (err && err.soldOut) {
+        // 伺服器確定沒收這張單，下次送出用新的識別碼
+        unconfirmedOrder = null;
+        handleSoldOutReply(err.soldOut);
+        return;
+      }
       console.error('Sync order to Sheets failed:', err);
       // 購物車原封不動留著，unconfirmedOrder 也留著：內容沒改就再按一次，
       // 會沿用同一組識別碼，伺服器其實已經收到的話只會回傳原本那張，不會多一張。
       const timedOut = err && err.name === 'AbortError';
       showToast((timedOut ? '連線逾時' : '訂單送出失敗') + '\n請再按一次「送出訂單」', 6000);
     });
+}
+
+/* ── 送出時才發現有品項售完 ──
+   客人的菜單在購物車有東西後就不會自動刷新（見 js/menu-api.js），
+   所以店家在後台按售完，客人畫面上不會知道，要到送單時才由伺服器擋下來。
+   這裡把售完的品項從購物車拿掉、菜單上標成售完，購物車最上面說明原因，其他品項保留讓客人再送一次。 */
+let cartNotice = null;   // 購物車最上面的說明（售完的品名陣列），關掉購物車或再送一次時清掉
+
+function handleSoldOutReply(names) {
+  const soldOut = new Set(names);
+  Object.keys(menuData).forEach(cat => {
+    (menuData[cat] || []).forEach(item => { if (item && soldOut.has(item.name)) item.soldOut = true; });
+  });
+  for (let i = cart.length - 1; i >= 0; i--) {
+    const item = (menuData[cart[i].cat] || [])[cart[i].idx] || {};
+    if (soldOut.has(item.name)) cart.splice(i, 1);
+  }
+  cartNotice = names;
+
+  const activeTab = document.querySelector('.tab-btn.active');
+  rerenderMenuPage(activeTab ? activeTab.getAttribute('data-key') : null);
+  openCart();
+  showToast('有品項剛剛售完\n已從購物車移除', 4000);
+  // 順便抓一次最新菜單，其他剛售完的品項也一起更新（購物車有東西時會等清空再套）
+  if (window.KigoMenuApi && typeof window.KigoMenuApi.refresh === 'function') window.KigoMenuApi.refresh();
 }
 
 const ORDER_TIMEOUT_MS = 30000;   // 伺服器搶鎖最多等 20 秒，再留一點餘裕

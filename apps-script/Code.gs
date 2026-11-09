@@ -42,7 +42,7 @@
 // /exec 服務的是「版本快照」，不是編輯器裡的內容 —— 貼上新程式碼按儲存並不會生效，
 // 一定要「管理部署作業 → 編輯 → 版本選新版本 → 部署」。這兩者很容易搞混，
 // 所以每次改這份檔案就把下面的數字 +1，直接打 /exec 根網址就能確認跑的是哪一版。
-var CODE_VERSION = 15;  // v15: 後台小便籤所有裝置同步（v14: 送單編號與今日訂單只讀表尾、價格快取 10 分鐘；v13: menuRaw 也要 token；v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
+var CODE_VERSION = 16;  // v16: 送單時擋下售完品項（v15: 後台小便籤所有裝置同步（v14: 送單編號與今日訂單只讀表尾、價格快取 10 分鐘；v13: menuRaw 也要 token；v12: 訂單加上店家備註 staffNote；v11: 前台菜單 action=menu 快取 5 分鐘，儲存菜單時作廢（v10: 客人送單檢查；v9: 重送防重複；v8: 單價核對；v7: 訂單清單快取；v6: 訂單管理需要 token）
 
 var SHEET_NAME = 'Orders';
 // 新欄位一律往後加，既有資料列的位置才不會跑掉。
@@ -331,6 +331,13 @@ function handleCreateOrder(payload) {
       previous.duplicate = true;
       return jsonResponse(previous);
     }
+    // 客人點的東西在他送出前被後台改成售完：整張不收，回傳是哪幾項，
+    // 前台會把它們從購物車拿掉、請客人確認後再送一次。
+    // 放在重送檢查之後：第一次其實已經收下的單，重送時要拿回原本的收據，不能因為後來售完就被拒。
+    if (!payload.manual) {
+      var soldOut = findSoldOutItems(items);
+      if (soldOut.length) return jsonResponse({ ok: false, error: 'sold out', soldOut: soldOut });
+    }
     // 放在重送檢查之後：重送不算新的一張，不佔額度
     if (!payload.manual) checkOrderRate();
 
@@ -474,7 +481,8 @@ function sheetSafeText(value) {
    直接在試算表改價格則最多晚這麼久才生效。
    v14 從 60 秒拉長到 10 分鐘：過期後下一張單要多讀一次 Items 工作表，
    60 秒太短，幾乎每張單都在付這個成本。 */
-var MENU_PRICE_CACHE_KEY = 'menu:prices';
+// v2：索引多了售完資訊。換 key 是為了不要讀到舊格式（沒有售完欄位）的快取
+var MENU_PRICE_CACHE_KEY = 'menu:prices:v2';
 var MENU_PRICE_CACHE_SECONDS = 600;
 
 function priceCustomerItems(items) {
@@ -493,6 +501,21 @@ function priceCustomerItems(items) {
   return unverified;
 }
 
+// 回傳售完品項的品名（照客人送來的名字，前台才對得上購物車）。
+// 找品項的方式跟 priceCustomerItems 一樣：先用 id，對不到再用品名。
+// 跟價格共用同一份快取；後台按售完會走 saveMenu，快取當場作廢，所以馬上生效。
+function findSoldOutItems(items) {
+  var index = menuPriceIndex();
+  var byId = index.soldOutById || {};
+  var byName = index.soldOutByName || {};
+  var names = [];
+  items.forEach(function (item) {
+    var soldOut = (item.id && index.byId.hasOwnProperty(item.id)) ? byId[item.id] : byName[item.name];
+    if (soldOut === true && names.indexOf(item.name) === -1) names.push(item.name);
+  });
+  return names;
+}
+
 function menuPriceIndex() {
   var cache = null;
   try {
@@ -503,17 +526,22 @@ function menuPriceIndex() {
     cache = null;
   }
 
-  var index = { byId: {}, byName: {} };
+  var index = { byId: {}, byName: {}, soldOutById: {}, soldOutByName: {} };
   menuReadSheet(MENU_SHEET_ITEMS, MENU_ITEMS_HEADERS).forEach(function (row) {
     var id = String(row.id == null ? '' : row.id).trim();
     if (!id || !menuToBool(row.active)) return;
     var price = menuPriceNumber(row.price);
+    var soldOut = menuToBool(row.soldOut);
     index.byId[id] = price;
+    index.soldOutById[id] = soldOut;
     var name = String(row.name == null ? '' : row.name).trim();
     if (!name) return;
     // 同名的品項（例如冰熱分兩列、價格不同）沒辦法只靠品名判斷，標記起來改走「未核對」
     index.byName[name] = index.byName.hasOwnProperty(name) && index.byName[name] !== price
       ? 'duplicate' : price;
+    // 同名的好幾列要「全部」售完才算售完，免得擋掉其實還有的那一列
+    index.soldOutByName[name] = index.soldOutByName.hasOwnProperty(name)
+      ? (index.soldOutByName[name] && soldOut) : soldOut;
   });
 
   if (cache) {
