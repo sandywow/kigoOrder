@@ -243,6 +243,12 @@ function tempLabel(temp) {
   return ` <span class="order-item-temp">(${esc(label)})</span>`;
 }
 
+// 數量緊接在品名後；超過 1 份加上醒目底色，避免看漏
+function qtyLabel(quantity) {
+  const qty = Number(quantity) || 0;
+  return `<span class="order-item-qty${qty > 1 ? ' is-multi' : ''}"><span class="qty-x">×</span>${qty}</span>`;
+}
+
 function buildOrderCard(order) {
   const status = ORDER_STATUS[order.status] ? order.status : 'new';
   const items = order.items || [];
@@ -256,7 +262,7 @@ function buildOrderCard(order) {
     const chargedQty = i.chargedQty != null ? Number(i.chargedQty) : (Number(i.quantity) || 0) - freeQty;
     return `
     <div class="order-item-row">
-      <span class="order-item-name">${esc(i.name)}${tempLabel(i.temp)}${
+      <span class="order-item-name">${esc(i.name)}${tempLabel(i.temp)}${qtyLabel(i.quantity)}${
         freeQty ? `<span class="order-item-free">招待${freeQty}</span>` : ''}</span>
       <span class="order-item-calc">NT$${Number(i.unitPrice) || 0} × ${chargedQty}</span>
       <span class="order-item-sub">NT$${Number(i.subtotal) || 0}</span>
@@ -1224,7 +1230,7 @@ function paintHistory() {
       const payment = paymentOf(order);
       const items = (order.items || []).map(i => {
         const freeQty = Number(i.freeQty) || 0;
-        return `${esc(i.name)}${tempLabel(i.temp)} ×${Number(i.quantity) || 0}` +
+        return `${esc(i.name)}${tempLabel(i.temp)}${qtyLabel(i.quantity)}` +
                (freeQty ? `<span class="order-item-free">招待${freeQty}</span>` : '');
       }).join('、');
       const id = esc(order.orderId);

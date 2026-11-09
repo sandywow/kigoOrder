@@ -752,6 +752,31 @@
     }
     .order-item-name { color: var(--ink); min-width: 0; }
     .order-item-temp { color: var(--caramel); font-size: 12px; }
+    /* 數量用和總金額同款襯線字；多份時用和「開始製作」按鈕同款的焦糖底奶油字 */
+    .order-item-qty {
+      display: inline-block;
+      margin-left: 6px;
+      font-family: 'DM Serif Display', serif;
+      font-size: 15px;
+      line-height: 1.3;
+      color: var(--ink-faint);
+      white-space: nowrap;
+    }
+    /* 襯線字沒有粗體，× 改用無襯線粗體才看得出筆畫 */
+    .order-item-qty .qty-x {
+      font-family: system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 0.8em;
+      margin-right: 2px;
+    }
+    .order-item-qty.is-multi {
+      padding: 0 9px;
+      border: 1px solid var(--caramel);
+      border-radius: 999px;
+      background: var(--caramel);
+      color: var(--cream);
+      font-size: 17px;
+    }
     .order-item-calc {
       color: var(--ink-faint);
       font-size: 15px;
