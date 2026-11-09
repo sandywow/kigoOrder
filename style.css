@@ -1138,23 +1138,27 @@ body::before {
 /* 剛售完的品項：品名變淡劃掉，中間蓋一個斜斜的朱紅色印章（圖案見 js/menu.js soldOutStamp） */
 .cart-item.is-soldout .cart-item-info { opacity: 0.45; }
 .cart-item.is-soldout .cart-item-name { text-decoration: line-through; text-decoration-color: rgba(30, 22, 9, 0.4); }
-/* 上下負 margin：印章在版面上只佔 30px（跟數量膠囊一樣高），這一列就跟其他列一樣高；
-   多出來的部分超出去、蓋到分隔線一點點，反而更像真的蓋上去的 */
+/* 上下負 margin：印章在版面上只佔 30px（跟數量膠囊一樣高），這一列就跟其他列一樣高。
+   再往右下歪一點（--stamp-tf），讓印章明顯壓過下面那條分隔線，像隨手蓋上去的。
+   z-index 讓它蓋在下一列的分隔線上面，不會被線切過去。 */
 .soldout-stamp {
-  width: 58px;
-  height: 58px;
-  margin: -14px 0;
+  --stamp-tf: translate(4px, 13px) rotate(-14deg);
+  position: relative;
+  z-index: 1;
+  width: 62px;
+  height: 62px;
+  margin: -16px 0;
   color: #A9432F;   /* 朱紅，比純紅沉一點，跟焦糖色系放在一起不刺眼 */
-  transform: rotate(-14deg);
+  transform: var(--stamp-tf);
   opacity: 0.9;
   overflow: visible;
 }
 /* 剛蓋上去的那一下：從大大的、透明的「砰」一聲壓下來 */
 .soldout-stamp.is-fresh { animation: stampDown 0.5s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 @keyframes stampDown {
-  0%   { transform: rotate(-14deg) scale(2.2); opacity: 0; }
-  60%  { transform: rotate(-14deg) scale(0.92); opacity: 0.95; }
-  100% { transform: rotate(-14deg) scale(1); opacity: 0.88; }
+  0%   { transform: var(--stamp-tf) scale(2.2); opacity: 0; }
+  60%  { transform: var(--stamp-tf) scale(0.92); opacity: 0.95; }
+  100% { transform: var(--stamp-tf) scale(1); opacity: 0.9; }
 }
 .cart-item-drop {
   justify-self: end;

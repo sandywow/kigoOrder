@@ -883,7 +883,7 @@ function soldOutStamp() {
   }).join('') : '<div class="cart-empty">購物車目前是空的</div>';
   if (cartNotice) {
     // 中文句子之間不能有換行，瀏覽器會把換行顯示成一個空白
-    wrap.insertAdjacentHTML('afterbegin', `<div class="cart-notice" role="alert"><p><span class="cart-notice-star" aria-hidden="true">✦</span>哎呀.ᐟ.ᐟ蓋章的品項剛剛售完了～<span class="cart-notice-star" aria-hidden="true">✦</span></p>${qtyTotal ? '<small>直接按送出，其他品項會照常幫你送出喔！</small>' : ''}</div>`);
+    wrap.insertAdjacentHTML('afterbegin', `<div class="cart-notice" role="alert"><p><span class="cart-notice-star" aria-hidden="true">✦</span>哎呀.ᐟ.ᐟ蓋章的品項剛剛售完了～<span class="cart-notice-star" aria-hidden="true">✦</span></p><small>${qtyTotal ? '直接按送出，其他品項會照常幫你送出喔！' : '回菜單看看吧！'}</small></div>`);
   }
 
   countEl.textContent = String(qtyTotal);
