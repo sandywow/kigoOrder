@@ -2,14 +2,14 @@ const menuData = {
   seasonal: [
     {
       name: "小幽靈の紅寶石泡湯派對",
-      nameJp: "幽靈莓果巴斯克",
+      nameJp: "莓果巴斯克",
       desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
       price: "NT$150",
       tag: "萬聖搗蛋小分隊",
       image: "src/GHOST PICTURE-07.webp",
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     },
     {
       name: "木乃伊の睡袋派對",
@@ -25,9 +25,9 @@ const menuData = {
     {
       name: "微醺隨想",
       nameJp: "店家特調・風味隨想",
-      desc: "獻給想放鬆一下的你\n一杯帶有酒精的微醺時光🍸",
+      desc: "獻給想放鬆一下的你\n帶有酒精的微醺時光🍸",
       price: "NT$250",
-      tag: null,
+      tag: "萬聖搗蛋小分隊",
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
@@ -119,7 +119,7 @@ const menuData = {
       nameJp: null,
       desc: "經典組合！以紅茶為基底，融合蘋果與肉桂香氣\n口感溫潤豐富，猶如一杯能喝的甜點",
       price: "NT$150",
-      tag: "暖心推薦",
+      tag: "人氣首選",
       image: null,
       emoji: null,
       temp: "hot",
@@ -198,9 +198,9 @@ const menuData = {
     {
       name: "微醺隨想",
       nameJp: "店家特調・風味隨想",
-      desc: "獻給想放鬆一下的你\n一杯帶有酒精的微醺時光🍸",
+      desc: "獻給想放鬆一下的你\n帶有酒精的微醺時光🍸",
       price: "NT$250",
-      tag: null,
+      tag: "萬聖搗蛋小分隊",
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
@@ -210,12 +210,14 @@ const menuData = {
   dessert: [
     {
       name: "小幽靈の紅寶石泡湯派對",
-      nameJp: "幽靈莓果巴斯克",
+      nameJp: "莓果巴斯克",
       desc: "噓～請勿打擾！\n冒牌巫師的小夥伴一年一度洗澡中👻💎",
       price: "NT$150",
       tag: "萬聖搗蛋小分隊",
       image: "src/GHOST PICTURE-07.webp",
-      emoji: null
+      emoji: null,
+      temp: null,
+      soldOut: true
     },
     {
       name: "木乃伊の睡袋派對",
@@ -224,7 +226,9 @@ const menuData = {
       price: "NT$100",
       tag: "萬聖搗蛋小分隊",
       image: "src/MUMMY PICTURE-07.webp",
-      emoji: null
+      emoji: null,
+      temp: null,
+      soldOut: false
     },
     {
       name: "香橙巴斯克蛋糕",
@@ -334,7 +338,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     }
   ]
 };
