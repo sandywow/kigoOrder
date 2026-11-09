@@ -791,6 +791,7 @@ function confirmAddToCart() {
   }
 
   renderCart();
+  bumpCartCount();
   showToast('已加入購物車');
   closeAddToCartModal();
 }
@@ -808,36 +809,62 @@ function toggleCart() {
 function openCart() { document.getElementById('cart-drawer').classList.add('open'); document.getElementById('cart-backdrop').classList.add('open'); renderCart(); }
 function closeCart() { document.getElementById('cart-drawer').classList.remove('open'); document.getElementById('cart-backdrop').classList.remove('open'); }
 
+// 剩 1 份時「−」換成垃圾桶：再按一下就是移除，客人看圖示就知道，不用另外一顆「移除」
+const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>`;
+
 function renderCart() {
   const wrap = document.getElementById('cart-items');
   const countEl = document.getElementById('cart-count');
   const totalEl = document.getElementById('cart-total');
   if (!wrap) return;
-  if (!cart.length) {
-    wrap.innerHTML = '<div class="cart-empty">購物車目前是空的</div>';
-    countEl.textContent = '0';
-    totalEl.textContent = 'NT$0';
-    flushPendingMenu();
-    return;
+
+  const seatEl = document.getElementById('cart-seat');
+  if (seatEl) {
+    seatEl.textContent = seating
+      ? `桌號 ${seating.tableNumber}${seating.nickname ? ` · ${seating.nickname}` : ''}`
+      : '';
   }
-  let html = '';
+
   let total = 0;
-  cart.forEach((c, i) => {
+  let qtyTotal = 0;
+  wrap.innerHTML = cart.length ? cart.map((c, i) => {
     const item = (menuData[c.cat] || [])[c.idx] || {};
     const price = itemUnitPrice(item) || 0;
     total += price * c.qty;
-    const tempLabel = c.temp ? ` <span class="cart-item-temp">(${c.temp === 'hot' ? '熱' : c.temp === 'iced' ? '冰' : c.temp})</span>` : '';
-    html += `<div class="cart-item">
+    qtyTotal += c.qty;
+    const tempLabel = c.temp ? ` <span class="cart-item-temp">(${c.temp === 'hot' ? '熱' : c.temp === 'iced' ? '冰' : escHtml(c.temp)})</span>` : '';
+    const minus = c.qty > 1
+      ? `<button type="button" onclick="changeQty(${i},-1)" aria-label="減少一份">−</button>`
+      : `<button type="button" class="is-remove" onclick="removeCartItem(${i})" aria-label="移除">${TRASH_ICON}</button>`;
+    return `<div class="cart-item">
       <div class="cart-item-info">
-        <div class="cart-item-name">${item.name || ''}${tempLabel}</div>
-        <div class="cart-item-controls">NT$${price} × <button onclick="changeQty(${i},-1)">-</button> <span class="cart-qty">${c.qty}</span> <button onclick="changeQty(${i},1)">+</button></div>
+        <div class="cart-item-name">${escHtml(item.name || '')}${tempLabel}</div>
+        <div class="cart-item-unit">NT$${price}</div>
       </div>
-      <div class="cart-item-remove"><button onclick="removeCartItem(${i})">移除</button></div>
+      <div class="cart-stepper">
+        ${minus}
+        <span class="cart-qty">${c.qty}</span>
+        <button type="button" onclick="changeQty(${i},1)" aria-label="增加一份"${c.qty >= MAX_ITEM_QTY ? ' disabled' : ''}>+</button>
+      </div>
+      <div class="cart-item-sub">NT$${price * c.qty}</div>
     </div>`;
-  });
-  wrap.innerHTML = html;
-  countEl.textContent = String(cart.reduce((s, c) => s + c.qty, 0));
+  }).join('') : '<div class="cart-empty">購物車目前是空的</div>';
+
+  countEl.textContent = String(qtyTotal);
+  countEl.hidden = !qtyTotal;   // 0 件不顯示小圓點
   totalEl.textContent = 'NT$' + total;
+  document.getElementById('cart-total-qty').textContent = `${qtyTotal} 件`;
+  if (!cart.length) flushPendingMenu();
+}
+
+// 加入購物車時，右下角的件數小圓點跳一下，客人才確定有加進去
+function bumpCartCount() {
+  const el = document.getElementById('cart-count');
+  if (!el) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;   // 強制重新排版，連續加兩次動畫才會重播
+  el.classList.add('bump');
 }
 
 function changeQty(i, delta) {
@@ -880,13 +907,17 @@ function todayOrders() {
   return loadOrderHistory().filter(o => new Date(o.createdAt).toDateString() === today);
 }
 
-// 菜單頁標題旁的入口，今天點過才出現
+// 購物車上方的浮動入口，今天點過才出現；角落的數字是今天點了幾筆
 function paintHistoryChip() {
   const chip = document.getElementById('history-chip');
   if (!chip) return;
   const count = todayOrders().length;
   chip.style.display = count ? '' : 'none';
-  chip.innerHTML = `點餐紀錄 <span class="history-chip-count">${count}</span>`;
+  chip.setAttribute('aria-label', `今日點餐紀錄，${count} 筆`);
+  chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z"/>
+      <path d="M9 8h6M9 11.5h6M9 15h4" stroke-linecap="round"/>
+    </svg><span class="history-fab-label">紀錄</span><span class="history-fab-count">${count}</span>`;
 }
 
 // 數量緊接在品名後，品名和金額之間用點線連起來，像收據
@@ -982,14 +1013,6 @@ function formatOrderTime(iso) {
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function receiptItemRow(item) {
-  const tempLabel = item.temp ? ` <span class="cart-item-temp">(${item.temp === 'hot' ? '熱' : item.temp === 'iced' ? '冰' : item.temp})</span>` : '';
-  const subtotal = (item.unitPrice || 0) * (item.quantity || 0);
-  return `<div class="receipt-item-row">
-      <div class="receipt-item-name">${item.name || ''}${tempLabel}</div>
-      <div class="receipt-item-line"><span>NT$${item.unitPrice || 0} × ${item.quantity || 0}</span><span>NT$${subtotal}</span></div>
-    </div>`;
-}
 
 let lastOrder = null;
 
@@ -1009,11 +1032,14 @@ function showOrderSuccess(order) {
 
   // 走到這裡時伺服器已經回應了，order.orderId 就是試算表上的編號
   document.getElementById('receipt-order-id').textContent = order.orderId || '';
+  // 訂單資訊後面壓的店名浮水印，跟著後台設定的店名走（樣式見 .receipt-meta::before）
+  document.querySelector('.receipt-meta').dataset.mark = landingData.cafeName || '';
   document.getElementById('receipt-order-time').textContent = formatOrderTime(order.createdAt);
   document.getElementById('receipt-table-number').textContent = order.tableNumber || '—';
   // 暱稱沒填就整列不顯示，收據才不會多一行空的
   setReceiptRow('receipt-nickname-row', 'receipt-nickname', order.nickname);
-  document.getElementById('receipt-items').innerHTML = order.items.map(receiptItemRow).join('');
+  // 品項跟今日點餐紀錄共用同一種列：品名 ×數量 ……… 小計
+  document.getElementById('receipt-items').innerHTML = order.items.map(historyItemRow).join('');
   document.getElementById('receipt-total').textContent = 'NT$' + order.total;
 
   document.getElementById('menu-page').classList.replace('visible', 'hidden');

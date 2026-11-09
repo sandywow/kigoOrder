@@ -1008,15 +1008,29 @@ body::before {
   right: 18px;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 120;
+  width: 52px;   /* 跟點餐紀錄按鈕同尺寸，主次交給顏色區分 */
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   background: var(--caramel);
   color: var(--cream);
   border: none;
-  padding: 12px 14px;
-  border-radius: 28px;
+  border-radius: 50%;
   box-shadow: 0 10px 30px rgba(30,22,9,0.25);
   cursor: pointer;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
+}
+.cart-button svg { width: 24px; height: 24px; }
+/* 件數小圓點：跟點餐紀錄的筆數同一款（見 .history-fab-count） */
+.cart-count[hidden] { display: none; }
+/* 加入購物車時跳一下（js/menu.js bumpCartCount） */
+.cart-count.bump { animation: cartBump 0.45s ease; }
+@keyframes cartBump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); }
+  65%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
 }
 
 .cart-backdrop {
@@ -1048,23 +1062,138 @@ body::before {
   flex-direction: column;
 }
 .cart-drawer.open { transform: translateX(0); }
-.cart-header { display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--parchment); }
-.cart-header h3 { font-family:'DM Serif Display',serif;color:var(--caramel);letter-spacing:0.2em;font-size:16px; }
+.cart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px dashed var(--beige);
+}
+.cart-header h3 {
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  color: var(--caramel);
+  letter-spacing: 0.2em;
+  font-size: 17px;
+  font-weight: normal;
+}
+.cart-seat {
+  margin-top: 3px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+}
+.cart-seat:empty { display: none; }
 .cart-close { background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-faint); }
-.cart-items { padding: 12px; overflow:auto; flex:1; }
-.cart-empty { color:var(--ink-faint); padding: 28px 12px; text-align:center; }
-.cart-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 8px; border-bottom:1px dashed var(--parchment); }
-.cart-item-name { font-family:'Noto Serif TC',serif; font-size:14px; color:var(--ink); }
-.cart-item-controls { font-size:13px; color:var(--ink-faint); display:flex; align-items:center; gap:8px; }
-.cart-item-controls button { padding:4px 8px; border-radius:4px; border:1px solid var(--beige); background:none; cursor:pointer; }
-.cart-item-remove button { background:none;border:1px solid var(--beige);padding:6px 8px;border-radius:4px;cursor:pointer; }
+.cart-items { padding: 4px 20px; overflow:auto; flex:1; }
+.cart-empty { color:var(--ink-faint); padding: 28px 12px; text-align:center; font-family:'Noto Serif TC',serif; font-size:13px; }
+/* 一列：品名／單價 ｜ 數量膠囊 ｜ 小計，像收據一樣金額靠右對齊 */
+.cart-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px dashed var(--beige);
+}
+.cart-item-name { font-family:'Noto Serif TC',serif; font-size:14px; color:var(--ink); line-height:1.4; }
+.cart-item-unit { margin-top: 2px; font-size: 11px; color: var(--ink-faint); letter-spacing: 0.04em; }
+.cart-item-sub {
+  font-family: 'DM Serif Display', serif;
+  font-size: 15px;
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+/* 數量膠囊：− 數字 ＋ 連成一顆，數字放大才不會看漏 */
+.cart-stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--beige);
+  border-radius: 999px;
+  background: var(--cream);
+}
+.cart-stepper button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--caramel);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cart-stepper button:disabled { color: var(--beige); cursor: default; }
+.cart-stepper button svg { width: 15px; height: 15px; }
+.cart-stepper .is-remove { color: var(--ink-faint); }
+.cart-qty {
+  min-width: 20px;
+  text-align: center;
+  font-family: 'DM Serif Display', serif;
+  font-size: 17px;
+  color: var(--ink);
+}
 /* 底部再墊一層安全區，送出訂單那排才不會壓在 home indicator／手勢列上面 */
-.cart-footer { padding:12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); border-top:1px solid var(--parchment); display:flex; flex-direction:column; gap:10px; }
-.cart-total { font-family:'DM Serif Display',serif;font-size:16px;color:var(--caramel); }
-.cart-actions { display:flex; gap:8px; }
-.cart-clear { background:none;border:1px solid var(--beige);padding:8px 12px;border-radius:6px;cursor:pointer; }
-.cart-submit { background:var(--caramel);color:var(--cream);border:none;padding:8px 12px;border-radius:6px;cursor:pointer; }
+.cart-footer {
+  padding: 4px 20px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* 合計：跟點餐紀錄收據同款的雙線分隔 */
+.cart-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 0 4px;
+  border-top: 3px double var(--ink-soft);
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  font-size: 22px;
+  color: var(--ink);
+}
+.cart-total small {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-left: 4px;
+}
+.cart-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 0;
+  border: none;
+  border-radius: 12px;
+  background: var(--caramel);
+  color: var(--cream);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 15px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
 .cart-submit:disabled { opacity: 0.7; cursor: wait; }
+/* 清空是不常用、按錯很麻煩的動作，縮成小字連結 */
+.cart-clear {
+  align-self: center;
+  background: none;
+  border: none;
+  padding: 2px 8px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cart-items:has(.cart-empty) ~ .cart-footer .cart-clear { visibility: hidden; }
 /* 送單中購物車內容不能改（見 js/menu.js setOrderSubmittingUi） */
 .cart-drawer.is-submitting .cart-items,
 .cart-drawer.is-submitting .cart-clear { opacity: 0.55; pointer-events: none; }
@@ -1490,40 +1619,54 @@ body::before {
 }
 
 /* ─── 今日點餐紀錄 ─── */
-/* 標題列：左邊菜單標題，右邊點餐紀錄入口（底部對齊） */
-.menu-title-row {
-  margin-top: 16px;
+/* 浮動入口：疊在購物車按鈕正上方，滑到哪裡都看得到。
+   購物車是實心焦糖色，這顆用白底焦糖框，兩顆一眼分得出主次。
+   兩顆同尺寸（52px）、同一個 right，上下對齊；中間留 10px。 */
+.history-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  z-index: 120;
+  width: 52px;
+  height: 52px;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-/* 外觀跟桌號膠囊同一套 */
-.history-chip {
-  flex-shrink: 0;
-  display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--beige);
-  border-radius: 20px;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid var(--caramel-lt);
+  border-radius: 50%;
   background: var(--white);
-  color: var(--ink-soft);
-  font-family: 'Noto Serif TC', serif;
-  font-size: 12px;
-  letter-spacing: 0.06em;
+  color: var(--caramel);
+  box-shadow: 0 8px 22px rgba(30, 22, 9, 0.18);
   cursor: pointer;
 }
-.history-chip-count {
-  min-width: 18px;
+.history-fab svg { width: 20px; height: 20px; }
+.history-fab-label {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
+/* 右上角的數字小圓點，購物車件數和紀錄筆數共用同一款。
+   外圈那道奶油色描邊，讓它在焦糖色的購物車上也分得開。 */
+.history-fab-count,
+.cart-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 19px;
+  height: 19px;
   padding: 0 5px;
   border-radius: 999px;
   background: var(--caramel);
   color: var(--cream);
+  font-family: 'Noto Serif TC', serif;
   font-size: 11px;
-  line-height: 18px;
+  line-height: 19px;
   text-align: center;
-  letter-spacing: 0;
+  box-shadow: 0 0 0 2px var(--cream);
 }
 /* 收據：一張上下緣是鋸齒的白紙。
    鋸齒用圓點漸層「咬」出半圓缺口，畫在外層的 ::before / ::after，
@@ -1541,7 +1684,9 @@ body::before {
   filter: drop-shadow(0 14px 22px rgba(30, 22, 9, 0.22));
 }
 .history-receipt::before,
-.history-receipt::after {
+.history-receipt::after,
+.receipt-card::before,
+.receipt-card::after {
   content: '';
   position: absolute;
   left: 0;
@@ -1550,11 +1695,13 @@ body::before {
   background-size: 14px 9px;
   background-repeat: repeat-x;
 }
-.history-receipt::before {
+.history-receipt::before,
+.receipt-card::before {
   top: -9px;
   background-image: radial-gradient(circle at 50% 0, transparent 5px, var(--paper) 5.5px);
 }
-.history-receipt::after {
+.history-receipt::after,
+.receipt-card::after {
   bottom: -9px;
   background-image: radial-gradient(circle at 50% 100%, transparent 5px, var(--paper) 5.5px);
 }
@@ -1740,11 +1887,19 @@ body::before {
   max-width: 420px;
   animation: fadeUp 0.8s ease both;
 }
+/* 成功頁時購物車剛清空、紀錄頁面上已有按鈕，右下兩顆浮動鈕藏起來，
+   不然會蓋住「查看今日點餐紀錄」 */
+body:has(#order-success-page.visible) .cart-button,
+body:has(#order-success-page.visible) .history-fab { display: none !important; }
+
+/* 跟今日點餐紀錄同一款鋸齒收據紙（鋸齒邊的寫法見 .history-receipt） */
 .receipt-card {
-  background: var(--white);
-  border-radius: 16px;
-  box-shadow: 0 18px 40px rgba(30, 22, 9, 0.12);
-  padding: 34px 26px;
+  --paper: #FFFDF8;
+  position: relative;
+  margin: 9px 0;   /* 留給上下鋸齒 */
+  background: var(--paper);
+  filter: drop-shadow(0 14px 22px rgba(30, 22, 9, 0.16));
+  padding: 30px 24px 26px;
   text-align: center;
 }
 /* 圓圈裡放小女孩上半身（src/success-girl.png）。圖已經去背、切到肚臍，
@@ -1778,13 +1933,33 @@ body::before {
   line-height: 1.9;
   margin-top: 3px;
 }
-.receipt-card .deco-rule { margin: 24px 0; }
+/* 訂單資訊這一塊收緊：上下留白、行距都是原本的一半 */
+.receipt-card .deco-rule { margin: 24px 0 12px; }
 .receipt-meta {
+  position: relative;
+  isolation: isolate;   /* 讓浮水印的 z-index:-1 只沉到這塊底下，不會掉到收據紙後面 */
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 4px;
   text-align: left;
-  margin-bottom: 22px;
+  margin-bottom: 11px;
+}
+/* 店名浮水印：菜單右上角同款手寫字，很淡、微斜，像蓋上去的店章。
+   置中在訂單編號到暱稱這一塊的正中間；壓在文字後面，單號、時間照樣清楚好讀。 */
+.receipt-meta::before {
+  content: attr(data-mark);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  font-family: 'Allura', 'Cormorant Garamond', cursive;
+  font-size: 46px;
+  line-height: 1;
+  color: var(--caramel);
+  opacity: 0.08;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  white-space: nowrap;
+  pointer-events: none;
 }
 .receipt-meta-row {
   display: flex;
@@ -1800,35 +1975,27 @@ body::before {
   letter-spacing: 0.02em;
   text-align: right;
 }
+/* 品項列用 .history-item（跟點餐紀錄共用），這裡只管外框和間距 */
 .receipt-items {
   text-align: left;
   border-top: 1px dashed var(--beige);
-  border-bottom: 1px dashed var(--beige);
-  padding: 16px 0;
-  margin-bottom: 20px;
+  padding: 16px 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 13px;
-}
-.receipt-item-name {
+  gap: 9px;
   font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
   color: var(--ink);
 }
-.receipt-item-line {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin-top: 3px;
-}
+/* 合計上方雙線，跟點餐紀錄同款 */
 .receipt-total {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  font-family: 'DM Serif Display', serif;
-  font-size: 19px;
-  color: var(--caramel);
+  padding-top: 12px;
+  border-top: 3px double var(--ink-soft);
+  font-family: 'DM Serif Display', 'Noto Serif TC', serif;
+  font-size: 20px;
+  color: var(--ink);
 }
 .receipt-back-btn {
   width: 100%;
