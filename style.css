@@ -1106,18 +1106,71 @@ body::before {
   white-space: nowrap;
 }
 /* 送出時有品項剛售完的說明（js/menu.js handleSoldOutReply） */
+/* 像收據上夾的一張小紙條：虛線框、文字置中，前後各一顆朱紅色的四角星，不用整塊色底 */
 .cart-notice {
-  margin: 12px 0 4px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--caramel);
-  border-radius: 0 8px 8px 0;
-  background: rgba(184, 132, 90, 0.12);
+  --stamp: #A9432F;
+  margin: 14px 0 6px;
+  padding: 10px 14px;
+  border: 1px dashed rgba(169, 67, 47, 0.4);
+  border-radius: 10px;
   font-family: 'Noto Serif TC', serif;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--ink-soft);
+  text-align: center;
 }
-.cart-notice b { color: var(--caramel); font-weight: 600; }
+.cart-notice p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+.cart-notice-star {
+  color: var(--stamp);
+  font-size: 10px;
+  margin: 0 7px;
+  vertical-align: 1px;
+}
+.cart-notice small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+/* 剛售完的品項：品名變淡劃掉，中間蓋一個斜斜的朱紅色印章（圖案見 js/menu.js soldOutStamp） */
+.cart-item.is-soldout .cart-item-info { opacity: 0.45; }
+.cart-item.is-soldout .cart-item-name { text-decoration: line-through; text-decoration-color: rgba(30, 22, 9, 0.4); }
+/* 上下負 margin：印章在版面上只佔 30px（跟數量膠囊一樣高），這一列就跟其他列一樣高；
+   多出來的部分超出去、蓋到分隔線一點點，反而更像真的蓋上去的 */
+.soldout-stamp {
+  width: 58px;
+  height: 58px;
+  margin: -14px 0;
+  color: #A9432F;   /* 朱紅，比純紅沉一點，跟焦糖色系放在一起不刺眼 */
+  transform: rotate(-14deg);
+  opacity: 0.9;
+  overflow: visible;
+}
+/* 剛蓋上去的那一下：從大大的、透明的「砰」一聲壓下來 */
+.soldout-stamp.is-fresh { animation: stampDown 0.5s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+@keyframes stampDown {
+  0%   { transform: rotate(-14deg) scale(2.2); opacity: 0; }
+  60%  { transform: rotate(-14deg) scale(0.92); opacity: 0.95; }
+  100% { transform: rotate(-14deg) scale(1); opacity: 0.88; }
+}
+.cart-item-drop {
+  justify-self: end;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--beige);
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.cart-item-drop svg { width: 15px; height: 15px; }
 /* 數量膠囊：− 數字 ＋ 連成一顆，數字放大才不會看漏 */
 .cart-stepper {
   display: flex;
