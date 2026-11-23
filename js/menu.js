@@ -401,7 +401,19 @@ function renderSection(category) {
     const soldOutHtml = item.soldOut ? `<span class="item-tag item-tag-soldout">售完</span>` : '';
     // 標籤一律自己一行，排在品名底下 —— 品名長短不一時才不會忽上忽下
     const tagsHtml   = (tagHtml || soldOutHtml) ? `<div class="menu-item-tags">${tagHtml}${soldOutHtml}</div>` : '';
-    const nameHtml   = item.name   ? `<span class="menu-item-name">${item.name}</span>` : '';
+    // 冰熱圖示接在品名最後一個字後面：品名長到換行時，圖示跟著最後一行走，
+    // 不會停在右邊兩行中間。最後一個字和圖示包在一起不斷行，圖示才不會自己掉到下一行。
+    const tempHtml   = tempIcons(item.temp);
+    let nameHtml = '';
+    if (item.name) {
+      const chars = Array.from(String(item.name));   // Array.from 才不會把 emoji 切成兩半
+      const last  = chars.pop();
+      nameHtml = tempHtml
+        ? `<span class="menu-item-name">${chars.join('')}<span class="menu-item-name-end">${last}${tempHtml}</span></span>`
+        : `<span class="menu-item-name">${item.name}</span>`;
+    } else {
+      nameHtml = tempHtml;
+    }
     const nameJpHtml = item.nameJp ? `<div class="menu-item-name-jp">${item.nameJp.replace(/\n/g, '<br>')}</div>` : '';
     const descHtml   = item.desc   ? `<p class="menu-item-desc">${item.desc.replace(/\n/g, '<br>')}</p>` : '';
     const priceHtml  = item.price  ? `<div class="menu-item-price">${item.price}</div>` : '';
@@ -419,7 +431,7 @@ function renderSection(category) {
     html += `
       <div class="menu-item${item.soldOut ? ' menu-item-soldout' : ''}" style="animation-delay:${i * 0.07}s">
         <div class="menu-item-body">
-          <div class="menu-item-top">${nameHtml}${tempIcons(item.temp)}</div>
+          <div class="menu-item-top">${nameHtml}</div>
           ${tagsHtml}
           ${nameJpHtml}
           ${descHtml}

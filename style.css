@@ -802,7 +802,11 @@ body::before {
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
+  margin-left: 6px;
+  vertical-align: -1px;   /* 對齊中文字的視覺中線 */
 }
+/* 品名最後一個字＋冰熱圖示：黏在一起不斷行 */
+.menu-item-name-end { white-space: nowrap; }
 .temp-icon {
   display: block;
   width: 16px;
