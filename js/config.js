@@ -1,6 +1,17 @@
 const menuData = {
   seasonal: [
     {
+      name: "雲朵琥珀歐蕾（附手工焦糖脆餅）",
+      nameJp: "錫蘭紅茶．鮮奶．綿密奶泡．焦糖脆餅",
+      desc: "☁️現泡錫蘭茶需要時間，請稍待…\n\n以時間醞釀茶香\n搭配焦糖脆餅的酥甜香氣\n誰說這不是一種在雲朵上的香醇享受呢(๑´༥`๑)〜♪♬",
+      price: "NT$160",
+      tag: null,
+      image: "src/latte PICTURE-09.webp",
+      emoji: null,
+      temp: "hot",
+      soldOut: false
+    },
+    {
       name: "微醺隨想",
       nameJp: "店家特調・風味隨想",
       desc: "獻給想放鬆一下的你\n帶有酒精的微醺時光🍸",
@@ -9,7 +20,7 @@ const menuData = {
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     }
   ],
   coffee: [
@@ -33,7 +44,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: "both",
-      soldOut: true
+      soldOut: false
     },
     {
       name: "冰釀咖啡",
@@ -124,6 +135,17 @@ const menuData = {
       emoji: null,
       temp: "iced",
       soldOut: true
+    },
+    {
+      name: "雲朵琥珀歐蕾（附手工焦糖脆餅）",
+      nameJp: "錫蘭紅茶．鮮奶．綿密奶泡．焦糖脆餅",
+      desc: "☁️現泡錫蘭茶需要時間，請稍待…\n\n以時間醞釀茶香\n搭配焦糖脆餅的酥甜香氣\n誰說這不是一種在雲朵上的香醇享受呢(๑´༥`๑)〜♪♬",
+      price: "NT$160",
+      tag: null,
+      image: "src/latte PICTURE-09.webp",
+      emoji: null,
+      temp: "hot",
+      soldOut: false
     }
   ],
   noncafe: [
@@ -147,7 +169,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: "iced",
-      soldOut: false
+      soldOut: true
     },
     {
       name: "接骨木檸檬泡泡",
@@ -182,7 +204,7 @@ const menuData = {
       image: "src/WINE-PICTURE.webp",
       emoji: null,
       temp: null,
-      soldOut: true
+      soldOut: false
     }
   ],
   dessert: [
@@ -294,7 +316,7 @@ const menuData = {
       image: null,
       emoji: null,
       temp: null,
-      soldOut: false
+      soldOut: true
     }
   ]
 };
@@ -305,7 +327,7 @@ const landingData = {
   showDate: false,
   dateSeasonLabel: "Autumn Menu",
   heroImage: null,
-  bannerImages: ["src/BANNER HALLOWEEN-07.webp"],
+  bannerImages: ["src/BANNER LATTE-08.webp"],
   heroBadge: null,
   heroTitle: null,
   heroSubtitle: null,
